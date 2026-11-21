@@ -68,6 +68,42 @@ test("valid upstream geometry is returned as a successful route", async () => {
   });
 });
 
+test("OSRM supplies full geometry and steps when GraphHopper fails", async () => {
+  let osrmRequested = false;
+  await withFetch(async (url) => {
+    if (String(url).startsWith("https://router.project-osrm.org/")) {
+      osrmRequested = true;
+      return upstreamResponse({
+        code: "Ok",
+        routes: [{
+          distance: 1234,
+          duration: 180,
+          geometry: { type: "LineString", coordinates: [[88.6, 27.3], [88.55, 27.25]] },
+          legs: [{
+            steps: [{
+              distance: 1234,
+              duration: 180,
+              name: "NH-10",
+              maneuver: { type: "depart", modifier: "straight" },
+              geometry: { coordinates: [[88.6, 27.3], [88.55, 27.25]] },
+            }],
+          }],
+        }],
+      });
+    }
+    return upstreamResponse("primary routing provider unavailable", 502);
+  }, async () => {
+    const result = await request(routeQuery(0.06));
+    assert.equal(result.statusCode, 200);
+    assert.equal(result.body.provider, "OSRM");
+    assert.equal(result.body.paths[0].distance, 1234);
+    assert.equal(result.body.paths[0].points.coordinates.length, 2);
+    assert.equal(result.body.paths[0].instructions[0].interval[0], 0);
+    assert.equal(result.body.paths[0].instructions[0].interval[1], 1);
+    assert.equal(osrmRequested, true);
+  });
+});
+
 test("empty upstream paths are reported as no route, not a successful route", async () => {
   await withFetch(async () => upstreamResponse({ paths: [] }), async () => {
     const result = await request(routeQuery(0.02));

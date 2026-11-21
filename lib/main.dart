@@ -291,8 +291,11 @@ class _CesiumPageState extends State<CesiumPage> {
 
     _locationUpdateInProgress = true;
     try {
+      final speedMps = position.speed.isFinite && position.speed >= 0
+          ? position.speed.toStringAsFixed(2)
+          : 'null';
       await controller.runJavaScript(
-        'window.updateUserMarker(${position.latitude}, ${position.longitude});',
+        'window.updateUserMarker(${position.latitude}, ${position.longitude}, $speedMps);',
       );
     } catch (locationBridgeError) {
       debugPrint(

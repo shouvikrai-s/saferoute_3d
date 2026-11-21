@@ -147,7 +147,7 @@ body,
 #srTrafficFreshness{display:block;margin-top:5px;color:#4b5563}
 .sr-2d-traffic-segment{fill:none;stroke-linecap:round;stroke-linejoin:round}
 #sr2dOverlay{position:absolute;inset:0;pointer-events:none}
-#sr2dRoute{fill:none;stroke:#2563eb;stroke-width:5;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke;filter:drop-shadow(0 1px 1px rgba(0,0,0,.45))}
+#sr2dRoute{fill:none;stroke:#22c55e;stroke-width:5;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke;filter:drop-shadow(0 1px 1px rgba(0,0,0,.45))}
 #sr2dTraffic{pointer-events:none}
 #sr2dPois{pointer-events:none}
 #sr2dPois circle{fill:#7c3aed;stroke:#fff;stroke-width:1.5;vector-effect:non-scaling-stroke}
@@ -785,6 +785,12 @@ input:focus-visible{
 .sr-data-live{ color:#159b70; } .sr-data-stale{ color:#b77910; } .sr-data-unavailable{ color:#7c8798; }
 #routeInfoPanel{ border-top:3px solid #2b71c3; }
 #routeInfoPanel .navDestLabel{ color:#6f8aaa; letter-spacing:.07em; text-transform:uppercase; }
+#srNavigationBanner{display:none;margin:8px 0;padding:10px 12px;border-radius:12px;background:#102b47;border:1px solid #315d88;color:#e6f0ff;font-size:13px;line-height:1.45;white-space:pre-line}
+#srNavigationBanner[aria-hidden="false"]{display:block}
+#srNavigationBanner strong{display:block;color:#9ed0ff;font-size:11px;letter-spacing:.06em;margin-bottom:3px}
+.sr-cat[data-ai-module],#aiMonitorButton,#mapAiMonitorButton,#safetyChip,#navSafety{touch-action:manipulation;pointer-events:auto}
+#aiMonitorButton{z-index:16001}
+#aiPanel,#aiModulePanel,#mapControlsPanel,#weatherRiskPanel{pointer-events:auto}
 @media (min-width:768px){
  .sr-sheet,#routeInfoPanel{ left:50% !important; right:auto !important; width:min(560px,100%); transform:translateX(-50%); }
  #srNav{ justify-content:center; } #srNav button{ max-width:200px; }
@@ -953,7 +959,7 @@ html.sr-welcome-dismissed #srWelcome,#srWelcome[hidden]{display:none}
 </script>
 <!-- Compact safety chip — tap to expand full safety sheet -->
 <button id="safetyChip" class="sr-chip sr-chip-pending" aria-label="Open safety details">
- <span id="safetyChipText">Checking safety data…</span>
+ <span id="safetyChipText">Cached safety values · updating</span>
 </button>
 <!-- Safety sheet: rainfall data (NOT official river-gauge data), hazard zones, official links -->
 <div id="weatherRiskPanel" class="sr-sheet">
@@ -964,12 +970,12 @@ html.sr-welcome-dismissed #srWelcome,#srWelcome[hidden]{display:none}
  </div>
  <div class="sr-sheet-subtitle">Live rainfall readings (Open-Meteo) — not official river-gauge data</div>
  <div id="weatherRiskText"></div>
- <div class="sr-row"><span>Rainfall</span><span class="sr-tag" id="srRainTag">Checking</span></div>
- <div class="sr-row"><span>Flood intelligence</span><span class="sr-tag" id="srFloodTag">Waiting for telemetry</span></div>
- <div class="sr-row"><span>Landslide screening</span><span class="sr-tag" id="srLandslideTag">Waiting for telemetry</span></div>
- <div class="sr-note" id="srWeatherTelemetryText">Weather telemetry is loading for the active map position.</div>
+ <div class="sr-row"><span>Rainfall</span><span class="sr-tag" id="srRainTag">No sample received</span></div>
+ <div class="sr-row"><span>Flood intelligence</span><span class="sr-tag" id="srFloodTag">No sample received</span></div>
+ <div class="sr-row"><span>Landslide screening</span><span class="sr-tag" id="srLandslideTag">No sample received</span></div>
+ <div class="sr-note" id="srWeatherTelemetryText">Cached telemetry will appear here when available; live data refreshes in the background.</div>
  <div class="sr-sheet-section-title">Air Quality</div>
- <div class="sr-note" id="srAirQualityTelemetryText">Open-Meteo current air-quality sample is loading.</div>
+ <div class="sr-note" id="srAirQualityTelemetryText">Cached air-quality telemetry will appear here when available; live data refreshes in the background.</div>
  <div class="sr-note">The level above uses current rainfall only (Open-Meteo). It is not an official warning.</div>
  <button class="sr-act" id="srRetryWeather">Refresh rainfall data</button>
  <button class="sr-act" id="safetyOpenEmergency">Emergency &amp; Help</button>
@@ -1067,8 +1073,8 @@ html.sr-welcome-dismissed #srWelcome,#srWelcome[hidden]{display:none}
  <div class="sr-sheet-section-title">Map type</div>
  <div class="sr-control-row"><div class="sr-control-copy"><strong>Default / 2D</strong><small>Lightweight OpenStreetMap road map</small></div><button class="sr-toggle" type="button" id="mapType2d" aria-pressed="true">Active</button></div>
  <div class="sr-control-row"><div class="sr-control-copy"><strong>3D</strong><small>Photorealistic imagery requires provider access; coverage varies by location</small></div><button class="sr-toggle" type="button" id="mapType3d" aria-pressed="false" aria-disabled="true">Loading</button></div>
- <div class="sr-control-row"><div class="sr-control-copy"><strong>Satellite</strong><small>Satellite imagery source is not configured</small></div><button class="sr-toggle" type="button" aria-disabled="true" aria-label="Satellite not configured">Unavailable</button></div>
- <div class="sr-control-row"><div class="sr-control-copy"><strong>Terrain elevation</strong><small>No separate terrain provider is configured; 3D tile surface varies by provider coverage</small></div><button class="sr-toggle" type="button" aria-disabled="true" aria-label="Terrain elevation not configured">Unavailable</button></div>
+ <div class="sr-control-row"><div class="sr-control-copy"><strong>Satellite</strong><small>Imagery is supplied by the active 3D tile provider where available</small></div><button class="sr-toggle" type="button" aria-disabled="true" aria-label="Satellite provider dependent">Provider-dependent</button></div>
+ <div class="sr-control-row"><div class="sr-control-copy"><strong>Terrain elevation</strong><small>Surface elevation depends on active 3D tile coverage; no separate elevation feed is connected</small></div><button class="sr-toggle" type="button" aria-disabled="true" aria-label="Terrain elevation provider dependent">Provider-dependent</button></div>
  <div class="sr-sheet-section-title">Map details</div>
  <div class="sr-control-row"><div class="sr-control-copy"><strong>Traffic flow</strong><small>TomTom relative-speed vector tiles; unobserved segments remain gray</small></div><button class="sr-toggle" type="button" id="trafficToggle" aria-pressed="false">Hidden</button></div>
  <div class="sr-control-row"><div class="sr-control-copy"><strong>Live hazards & tourism</strong><small>Multi-hazard corridors, Teesta basin context and tourism advisories</small></div><button class="sr-toggle" type="button" id="hazardToggle" aria-pressed="true">Shown</button></div>
@@ -1085,7 +1091,7 @@ html.sr-welcome-dismissed #srWelcome,#srWelcome[hidden]{display:none}
  <div class="sr-control-row"><div class="sr-control-copy"><strong>Tourist places</strong><small>OpenStreetMap places in the current view</small></div><button class="sr-toggle" type="button" data-map-poi="tourist" aria-pressed="false">Hidden</button></div>
  <div class="sr-control-row"><div class="sr-control-copy"><strong>Viewpoints</strong><small>OpenStreetMap places in the current view</small></div><button class="sr-toggle" type="button" data-map-poi="viewpoint" aria-pressed="false">Hidden</button></div>
  <div class="sr-control-row"><div class="sr-control-copy"><strong>Parking</strong><small>OpenStreetMap places in the current view</small></div><button class="sr-toggle" type="button" data-map-poi="parking" aria-pressed="false">Hidden</button></div>
- <div class="sr-control-row"><div class="sr-control-copy"><strong>Roads</strong><small>Named roads are available through search; no separate overlay source</small></div><button class="sr-toggle" type="button" aria-disabled="true" aria-label="Road overlay not configured">Unavailable</button></div>
+ <div class="sr-control-row"><div class="sr-control-copy"><strong>Roads</strong><small>Roads are included in the 2D OpenStreetMap basemap; no separate 3D road overlay is connected</small></div><button class="sr-toggle" type="button" aria-disabled="true" aria-label="Roads included in 2D basemap">2D basemap</button></div>
  <div class="sr-control-row"><div class="sr-control-copy"><strong>3D building geometry</strong><small>Only included where provider tiles supply it; not independently verified</small></div><button class="sr-toggle" type="button" aria-disabled="true" aria-label="3D building availability depends on provider">Provider-dependent</button></div>
  <div class="sr-control-row"><div class="sr-control-copy"><strong>Air quality</strong><small>Open-Meteo current pollutants and AQI</small></div><button class="sr-toggle" type="button" data-ai-module="air">Open</button></div>
 </div>
@@ -1100,6 +1106,7 @@ html.sr-welcome-dismissed #srWelcome,#srWelcome[hidden]{display:none}
  <div class="navHeaderRow">
  <div class="navDestLabel">Route to destination</div>
  </div>
+ <div id="srNavigationBanner" role="status" aria-live="polite" aria-hidden="true"></div>
  <div id="routeInfoText"></div>
  <div class="navBottomRow">
  <button id="startNavButton" class="sr-act primary" style="display:none">Start navigation</button>
@@ -1159,6 +1166,26 @@ html.sr-welcome-dismissed #srWelcome,#srWelcome[hidden]{display:none}
 <script>
 (function(){
  var $=function(i){return document.getElementById(i);};
+ function haversineDistanceKm(lat1,lon1,lat2,lon2){
+  var rad=Math.PI/180,dLat=(lat2-lat1)*rad,dLon=(lon2-lon1)*rad;
+  var a=Math.sin(dLat/2)*Math.sin(dLat/2)+Math.cos(lat1*rad)*Math.cos(lat2*rad)*Math.sin(dLon/2)*Math.sin(dLon/2);
+  return 6371*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+ }
+ window.__srBindFastTap=function(button,handler){
+  if(!button)return;
+  button.style.touchAction="manipulation";
+  button.style.pointerEvents="auto";
+  var pointerAt=0;
+  button.addEventListener("pointerup",function(event){
+   if(event.button!==0||event.isPrimary===false)return;
+   pointerAt=Date.now();
+   handler(event);
+  },{passive:true});
+  button.addEventListener("click",function(event){
+   if(Date.now()-pointerAt<500)return;
+   handler(event);
+  });
+ };
  var SR_PANELS=["osmSearchPanel","weatherRiskPanel","permitPanel","helplinePanel","profilePanel","aiPanel","aiModulePanel","mapControlsPanel"];
  function hideAll(){ SR_PANELS.forEach(function(id){ $(id).style.display="none"; }); }
  function hideProfile(){ $("profilePanel").style.display="none"; $("aiPanel").style.display="none"; $("aiModulePanel").style.display="none"; }
@@ -1171,23 +1198,28 @@ html.sr-welcome-dismissed #srWelcome,#srWelcome[hidden]{display:none}
  SR_PANELS.forEach(function(id){
   new MutationObserver(sync).observe($(id),{attributes:true,attributeFilter:["style"]});
  });
- $("navMap").addEventListener("click",function(){ hideAll(); sync(); });
- $("navExplore").addEventListener("click",function(){ hideProfile(); if($("osmSearchPanel").style.display!=="block") $("osmSearchButton").click(); });
- $("navSafety").addEventListener("click",function(){ hideProfile(); if($("weatherRiskPanel").style.display!=="block") $("safetyChip").click(); });
+ window.__srBindFastTap($("navMap"),function(){hideAll();sync();});
+ window.__srBindFastTap($("navExplore"),function(){hideProfile();if($("osmSearchPanel").style.display!=="block")$("osmSearchButton").click();});
+ window.__srBindFastTap($("navSafety"),function(){var open=$("weatherRiskPanel").style.display==="block";hideAll();if(!open)$("weatherRiskPanel").style.display="block";sync();});
  $("profileButton").addEventListener("click",function(){ var o=$("profilePanel").style.display==="block"; hideAll(); $("profilePanel").style.display=o?"none":"block"; });
  $("profileVoiceToggle").addEventListener("click",function(){ if(typeof window.__toggleVoice==="function") window.__toggleVoice(); });
  $("distanceUnitPreference").value=window.SafeRoutePreferences.getDistanceUnit();
  $("distanceUnitPreference").addEventListener("change",function(){ window.SafeRoutePreferences.setDistanceUnit(this.value); });
- $("mapControlsButton").addEventListener("click",function(){ var o=$("mapControlsPanel").style.display==="block"; hideAll(); $("mapControlsPanel").style.display=o?"none":"block"; sync(); });
+ window.__srBindFastTap($("mapControlsButton"),function(){var o=$("mapControlsPanel").style.display==="block";hideAll();$("mapControlsPanel").style.display=o?"none":"block";sync();});
  function openAiCenter(){
   hideAll(); $("aiPanel").style.display="block"; sync();
-  var live=SafeRouteAIEngine.live(), rows=[["MAP",SafeRouteAIEngine.map()],["ROUTE",live.route],["TRAFFIC",live.traffic],["WEATHER",live.weather],["AIR QUALITY",live.air],["FLOOD",live.flood],["DAM",live.dam],["HAZARDS",live.hazards],["LANDSLIDE",SafeRouteAIEngine.landslide()],["SAFETY",SafeRouteAIEngine.safety()],["TOURISM",SafeRouteAIEngine.tourism()],["EMERGENCY",SafeRouteAIEngine.emergency()],["GPS",live.gps]];
-  $("aiCenterSummary").textContent="";
-  var note=document.createElement("span"); note.className="sr-tag"; note.textContent="LOCAL RULES · NOT A TRAINED AI MODEL"; $("aiCenterSummary").appendChild(note);
-  rows.forEach(function(row){ var d=document.createElement("div"); d.className="sr-control-row"; var c=document.createElement("div"); c.className="sr-control-copy"; var s=document.createElement("strong"); s.textContent=row[0]+" · "+row[1].status; var v=document.createElement("small"); v.textContent="Checked "+row[1].timestamp+" · "+row[1].reason; c.appendChild(s); c.appendChild(v); d.appendChild(c); $("aiCenterSummary").appendChild(d); });
+  var summary=$("aiCenterSummary");
+  summary.textContent="Local snapshot ready · refreshed telemetry updates silently in the background.";
+  setTimeout(function(){
+   if($("aiPanel").style.display!=="block")return;
+   var live=SafeRouteAIEngine.live(),rows=[["MAP",SafeRouteAIEngine.map()],["ROUTE",live.route],["TRAFFIC",live.traffic],["WEATHER",live.weather],["AIR QUALITY",live.air],["FLOOD",live.flood],["DAM",live.dam],["HAZARDS",live.hazards],["LANDSLIDE",SafeRouteAIEngine.landslide()],["SAFETY",SafeRouteAIEngine.safety()],["TOURISM",SafeRouteAIEngine.tourism()],["EMERGENCY",SafeRouteAIEngine.emergency()],["GPS",live.gps]];
+   summary.textContent="";
+   var note=document.createElement("span");note.className="sr-tag";note.textContent="LOCAL RULES · DATA SOURCE AND FRESHNESS LABELLED";summary.appendChild(note);
+   rows.forEach(function(row){var d=document.createElement("div"),c=document.createElement("div"),s=document.createElement("strong"),v=document.createElement("small");d.className="sr-control-row";c.className="sr-control-copy";s.textContent=row[0]+" · "+row[1].status;v.textContent="Checked "+row[1].timestamp+" · "+row[1].reason;c.appendChild(s);c.appendChild(v);d.appendChild(c);summary.appendChild(d);});
+  },0);
  }
- $("aiMonitorButton").addEventListener("click",openAiCenter);
- $("mapAiMonitorButton").addEventListener("click",openAiCenter);
+ window.__srBindFastTap($("aiMonitorButton"),openAiCenter);
+ window.__srBindFastTap($("mapAiMonitorButton"),openAiCenter);
  $("mapControlsClose").addEventListener("click",function(){ $("mapControlsPanel").style.display="none"; sync(); });
  $("trafficToggle").addEventListener("click",function(){
   if (!window.__srTrafficManager) return;
@@ -1235,7 +1267,7 @@ html.sr-welcome-dismissed #srWelcome,#srWelcome[hidden]{display:none}
   }
   if(manager.stats&&manager.stats.failed>0)return {state:"ERROR",detail:"Traffic tile requests failed; no usable relative_speed observations"};
   if(manager.stats&&manager.stats.loaded>0)return {state:"NO SAMPLE",detail:"Loaded tiles contained no fresh decoded relative_speed observations"};
-  if(manager.enabled&&(manager.activeRequests>0||manager.queue.length>0))return {state:"PROCESSING",detail:"Waiting for validated traffic observations"};
+  if(manager.enabled&&(manager.activeRequests>0||manager.queue.length>0))return {state:"PROCESSING",detail:"No validated traffic sample received yet"};
   var nearest=nearestLiveCorridor(telemetryPoint()), flow=nearest&&nearest.record.traffic;
   if(flow&&flow.currentSpeed!=null&&Number.isFinite(Number(flow.currentSpeed)))return {state:window.__srLiveSnapshotBadge==="LIVE ONLINE"?"LIVE":"CACHED",detail:nearest.record.name+" corridor · "+flow.currentSpeed+" km/h"+(flow.freeFlowSpeed!=null?" / "+flow.freeFlowSpeed+" km/h":"")};
   return {state:"NO SAMPLE",detail:manager.enabled?"No usable traffic observation has loaded":"Traffic layer is off; corridor telemetry is checked when available"};
@@ -1252,7 +1284,7 @@ html.sr-welcome-dismissed #srWelcome,#srWelcome[hidden]{display:none}
   freshness.textContent=state.state+" · "+state.detail+" · Unobserved roads are not classified.";
  };
  function aiWeatherState(){
-  var value=aiValue("#safetyChipText","Rainfall sample pending");
+  var value=aiValue("#safetyChipText","Rainfall telemetry not yet received");
   var weather=window.SafeRouteAIEngine&&window.SafeRouteAIEngine.weather();
   if(weather&&weather.status) return {state:weather.status,value:value};
   if(value.indexOf("Checking")===0) return {state:"PROCESSING",value:value};
@@ -1263,7 +1295,7 @@ html.sr-welcome-dismissed #srWelcome,#srWelcome[hidden]{display:none}
  }
  LocalDataGroundedEngine.prototype.now=function(){return new Date().toISOString();};
  LocalDataGroundedEngine.prototype.result=function(status,severity,confidence,risk,reason,recommendation,affectedArea,sources){
-  return {status:status,severity:severity,risk:risk,reason:reason,recommendation:recommendation,affectedArea:affectedArea,timestamp:this.now(),sources:sources||[]};
+   return {status:status,severity:severity==="UNKNOWN"?"NO SAMPLE":severity,risk:risk==="UNKNOWN"?"INSUFFICIENT DATA":risk,reason:reason,recommendation:recommendation,affectedArea:affectedArea,timestamp:this.now(),sources:sources||[]};
  };
  function telemetryPoint(){
   var gps=window.__srUserLocation;
@@ -1311,7 +1343,7 @@ html.sr-welcome-dismissed #srWelcome,#srWelcome[hidden]{display:none}
   return record?{flood:{river_discharge_m3s:record.river_discharge_m3s,flood_risk:record.flood_risk},status:window.__srLiveSnapshotBadge==="LIVE ONLINE"?"LIVE":"CACHED",source:"Open-Meteo GloFAS · "+record.name}:{flood:null,status:"NO SAMPLE",source:"Open-Meteo GloFAS"};
  }
  function riskTier(score){
-  if(!Number.isFinite(score))return "UNKNOWN";
+  if(!Number.isFinite(score))return "INSUFFICIENT DATA";
   return score>=80?"CRITICAL":score>=60?"HIGH":score>=35?"MODERATE":"LOW";
  }
  function currentRiskScore(){
@@ -1387,7 +1419,7 @@ html.sr-welcome-dismissed #srWelcome,#srWelcome[hidden]{display:none}
  LocalDataGroundedEngine.prototype.hazards=function(){
   var zones=window.__srHazardZones||[],route=window.__srActiveRoute,hits=[];
   if(route&&route.coordinates)zones.forEach(function(zone){var distance=Infinity;route.coordinates.forEach(function(c){distance=Math.min(distance,haversineDistanceKm(zone.lat,zone.lon,Number(c[1]),Number(c[0])));});if(distance<=zone.radiusKm)hits.push(zone.name+" ("+distance.toFixed(1)+" km)");});
-  return this.result(zones.length?"REFERENCE ONLY":"NO REFERENCE DATA",hits.length?"REFERENCE OVERLAP":"UNKNOWN",0,"UNKNOWN",
+  return this.result(zones.length?"REFERENCE ONLY":"NO REFERENCE DATA",hits.length?"REFERENCE OVERLAP":"NO LIVE INCIDENT FEED",0,"INSUFFICIENT DATA",
    zones.length+" dated reference zone(s) loaded; "+(hits.length?hits.join(", "):"no route overlap confirmed")+". References are not live incidents; no nearby live incident feed is included in this response.",
    "Check current official hazard advisories; absence of a reference match does not establish safety.",telemetryPoint()?"Active map/route position":"Map position pending",["Sikkim Geospatial Registry · dated reference data"]);
  };
@@ -1411,7 +1443,7 @@ html.sr-welcome-dismissed #srWelcome,#srWelcome[hidden]{display:none}
   var nearest=dams.map(function(dam){return {dam:dam,distanceKm:point?haversineDistanceKm(point.lat,point.lon,dam.lat,dam.lon):null};}).sort(function(a,b){return (a.distanceKm||Infinity)-(b.distanceKm||Infinity);});
   var flood=pointFlood(),flow=flood.flood&&Number.isFinite(Number(flood.flood.river_discharge_m3s))?Number(flood.flood.river_discharge_m3s):null;
   var list=nearest.map(function(item){return item.dam.name+" "+item.dam.lat.toFixed(5)+", "+item.dam.lon.toFixed(5)+(item.distanceKm===null?"":" · "+item.distanceKm.toFixed(1)+" km");}).join("; ");
-  return this.result("REFERENCE ONLY","UNKNOWN",0,"UNKNOWN",
+  return this.result("REFERENCE ONLY","OPERATOR TELEMETRY NOT CONNECTED",0,"NOT SCORED",
    (dams.length?dams.length+" verified-in-app dam reference point(s): "+list+". ":"No dam reference points are loaded. ")+
    (flow===null?"No river-discharge sample was reported.":"Nearby GloFAS grid discharge "+flow.toFixed(1)+" m³/s ("+flood.source+"); this is not dam inflow or operator telemetry.")+
    " Reservoir level, release, gate status and operational protocol are not provided by connected feeds.",
@@ -1532,13 +1564,13 @@ html.sr-welcome-dismissed #srWelcome,#srWelcome[hidden]{display:none}
   landslide:{title:"AI LANDSLIDE", rows:[["Status","RAINFALL / PROXIMITY SCREENING"],["Live incidents","No incident claim without an incident feed"],["Prediction","Slope data is not connected"],["Recommendation","Check official disaster-management alerts"]]},
   flood:{title:"AI FLOOD", rows:[["Flood source","Open-Meteo GloFAS when sampled"],["Source status","Source-labelled"],["Freshness","Timestamped provider sample"],["Analysis","Discharge and rainfall screening; not an official warning"],["Recommendation","Use official river and disaster-management alerts"]]},
   dam:{title:"AI DAM / WATER SAFETY", rows:[["Dam source","Static Sikkim reference registry"],["Source status","Reference only"],["Freshness","No operator telemetry is provided"],["Water level / release","Not reported by connected feeds"],["Analysis","Rainfall and nearby river flow are not dam inflow"],["Recommendation","Follow the dam operator and official authorities"]]},
-  safety:{title:"AI SAFETY", rows:[["Safety Status","Deterministic rules active"],["Current Risk",function(){return aiValue("#safetyChipText","Rainfall sample pending")}],["Nearby Risk Factors","Computed from available, source-labelled data"],["Analysis","Unknown inputs are not treated as safe"],["Recommendation","Use current official safety guidance"]]},
+  safety:{title:"AI SAFETY", rows:[["Safety Status","Deterministic rules active"],["Current Risk",function(){return aiValue("#safetyChipText","Rainfall telemetry not yet received")}],["Nearby Risk Factors","Computed from available, source-labelled data"],["Analysis","Unknown inputs are not treated as safe"],["Recommendation","Use current official safety guidance"]]},
   tourism:{title:"AI TOURISM", rows:[["Status","Corridor advisory snapshot"],["Nearby Places","Current-view OSM results and static circuits"],["Conditions","Based on available weather/corridor observations"],["Restrictions","Permit advisories are not permit verification"],["Road Access","TomTom corridor samples when received"],["Recommendation","Verify permits and official road notices"]]},
   emergency:{title:"AI EMERGENCY", rows:[["Status","STATIC REFERENCE LOCATIONS"],["Nearest Help","Sorted by distance from current position"],["Road Access","Requires current route/traffic observations"],["Current Hazards","Source-labelled route screening"],["Emergency Numbers","Available in Emergency & Help"],["Recommended Action","Contact local emergency services directly"]]},
   live:{title:"LIVE MONITOR", rows:[["Traffic",function(){return aiTrafficState().state}],["Weather",function(){return aiWeatherState().state}],["Air quality",function(){return pointAirQuality().status}],["Hazards","Reference zones plus received live feeds"],["GPS",function(){return SafeRouteAIEngine.gps().status}],["Route",function(){return $("routeInfoPanel").style.display==="block"?"ACTIVE":"NO ACTIVE ROUTE"}],["Rules Engine","ACTIVE · deterministic local screening"],["Traffic Last Update","TomTom tile/corridor receipt time"],["Weather Last Update","Open-Meteo point or corridor timestamp"]]},
   status:{title:"AI SYSTEM STATUS", rows:[["AI Engine","LOCAL DETERMINISTIC RULES"],["Map Intelligence","Viewport, GPS and source-labelled feeds"],["Route Intelligence","Active route geometry and available observations"],["Traffic Intelligence",function(){return aiTrafficState().state}],["Weather Intelligence",function(){return aiWeatherState().state}],["Air Quality Intelligence",function(){return pointAirQuality().status}],["Hazard Intelligence","Dated reference data plus received feeds"],["Safety Intelligence","Deterministic, data-grounded screening"],["Tourism Intelligence","Corridor advisories and current-view results"],["Emergency Intelligence","Built-in reference locations"],["Data Sources","Open-Meteo, TomTom when configured, Sikkim reference registry"],["Last Update",function(){return SafeRouteAIEngine.now();}]]}
  };
- function openAiModule(key, skipRulesRequest){
+ function renderAiModuleNow(key, skipRulesRequest){
   var module=aiModules[key]; if(!module) return;
   window.__srActiveAiModule=key;
   var analyses={map:SafeRouteAIEngine.map,route:SafeRouteAIEngine.route,traffic:SafeRouteAIEngine.traffic,weather:SafeRouteAIEngine.weather,air:SafeRouteAIEngine.air,hazards:SafeRouteAIEngine.hazards,landslide:SafeRouteAIEngine.landslide,flood:SafeRouteAIEngine.flood,dam:SafeRouteAIEngine.dam,safety:SafeRouteAIEngine.safety,tourism:SafeRouteAIEngine.tourism,emergency:SafeRouteAIEngine.emergency};
@@ -1550,6 +1582,12 @@ html.sr-welcome-dismissed #srWelcome,#srWelcome[hidden]{display:none}
    corridorRows.forEach(function(row){liveRows.push(["Corridor · "+row[0],row[1]]);});
    if(snapshot&&Array.isArray(snapshot.corridors))snapshot.corridors.forEach(function(c){var air=c.air_quality||{};liveRows.push([c.name+" Multi-Hazard","Flood "+(c.flood_risk||"NO SAMPLE")+" · "+(c.river_discharge_m3s==null?"no discharge sample":c.river_discharge_m3s.toFixed(1)+" m³/s")+" · Landslide "+(c.landslide_risk||"NO SAMPLE")+" · US AQI "+(air.us_aqi==null?"not reported":air.us_aqi)+" · EU AQI "+(air.european_aqi==null?"not reported":air.european_aqi)+" · PM2.5 "+(air.pm2_5==null?"not reported":air.pm2_5)+" · PM10 "+(air.pm10==null?"not reported":air.pm10)+" · O₃ "+(air.ozone==null?"not reported":air.ozone)+" · NO₂ "+(air.nitrogen_dioxide==null?"not reported":air.nitrogen_dioxide)+" · CO "+(air.carbon_monoxide==null?"not reported":air.carbon_monoxide)]);});
    tourismRows.forEach(function(row){liveRows.push(["Tourism · "+row[0],row[1]]);});
+   var backendState=window.__srLiveState||{},endpointStatus=backendState.endpointStatus||{};
+   ["assessment","hazards","tourism","emergency"].forEach(function(source){
+    var payload=source==="assessment"?backendState.assessment:backendState.nearby&&backendState.nearby[source];
+    var list=payload&&(payload.hazards||payload.tourism||payload.emergencyFacilities),status=endpointStatus[source]||"CACHED / NO SAMPLE";
+    liveRows.push(["Backend "+source,status+(Array.isArray(list)?" · "+list.length+" result(s)":"")]);
+   });
    module={title:"LIVE MONITOR",rows:liveRows};
   }
   else if(key==="status"){
@@ -1567,7 +1605,6 @@ html.sr-welcome-dismissed #srWelcome,#srWelcome[hidden]{display:none}
    var title=document.createElement("div"); title.className="sr-ai-assessment-title"; title.textContent="TRAFFIC OBSERVATION RULES"; modelSection.appendChild(title);
    [["OBSERVATIONS",aiTrafficState().detail],["LOCAL RULES",rules.severity+" · "+rules.risk],["CLUSTERING",model.status==="INFERRED"?model.result.congestionClass+" · "+model.result.risk:model.status],["ASSESSMENT",rules.reason]].forEach(function(row){var d=document.createElement("div");d.className="sr-control-row";var l=document.createElement("div");l.className="sr-control-copy";var s=document.createElement("strong");s.textContent=row[0];var v=document.createElement("small");v.textContent=row[1];l.appendChild(s);l.appendChild(v);d.appendChild(l);modelSection.appendChild(d);});
    var noteModel=document.createElement("div"); noteModel.className="sr-note"; noteModel.textContent=model.status==="INFERRED"?"Model: "+model.result.model+" v"+model.result.modelVersion+" | Type: "+model.result.modelType+" | Training: "+model.result.trainingStatus+" | Provenance verified: "+model.result.provenanceVerified+" | Inference: "+model.result.inferenceTimeMs+" ms. "+(model.result.explanation||""):model.error; modelSection.appendChild(noteModel); content.appendChild(modelSection);
-   if((model.status==="NO MODEL INPUT"||model.status==="INSUFFICIENT SAMPLES"||model.status==="ERROR")&&Date.now()-trafficModelState.attemptedAt>30000){requestTrafficModel().then(function(){if($("aiModulePanel").style.display==="block"&&$("aiModuleTitle").textContent==="AI TRAFFIC"){openAiModule("traffic");}});}
   }
   if(["map","route","weather","air","hazards","landslide","flood","dam","safety","tourism","emergency"].indexOf(key)>=0){
    var ruleAnalysis=analyses[key].call(SafeRouteAIEngine),ruleScore=ruleAnalysis.riskScore,point=window.__srPointTelemetry,sourceStates=point&&point.sourceStatus||{},trafficState=aiTrafficState().state;
@@ -1576,8 +1613,22 @@ html.sr-welcome-dismissed #srWelcome,#srWelcome[hidden]{display:none}
    var ruleRows=[["RULES STATUS","ACTIVE · local deterministic screening"],["RULES RESULT",ruleScore==null?"INDETERMINATE · no numeric samples":ruleScore+"/100 · "+ruleAnalysis.risk],["FINAL ASSESSMENT",ruleAnalysis.status],["SOURCES","Open-Meteo Weather: "+(sourceStates.weather||"not received")+"; Open-Meteo Air Quality: "+(sourceStates.air_quality||"not received")+"; Open-Meteo Flood Discharge: "+(sourceStates.flood||"not received")+"; TomTom Traffic: "+trafficState+"; USGS Seismic: not connected; NASA FIRMS: not configured; Sikkim Geospatial Registry: reference data"]];
    ruleRows.forEach(function(row){var d=document.createElement("div");d.className="sr-control-row";var l=document.createElement("div");l.className="sr-control-copy";var s=document.createElement("strong");s.textContent=row[0];var v=document.createElement("small");v.textContent=row[1];l.appendChild(s);l.appendChild(v);d.appendChild(l);section.appendChild(d);});
    var detail=document.createElement("div");detail.className="sr-note";detail.textContent="Deterministic analysis: "+ruleAnalysis.reason+" Recommendation: "+ruleAnalysis.recommendation;section.appendChild(detail);content.appendChild(section);
-   if(!skipRulesRequest&&key!=="air"){requestModelTask(key).then(function(){if($("aiModulePanel").style.display==="block"&&$("aiModuleTitle").textContent===module.title){openAiModule(key,true);}});}
   }
+ }
+ var aiModuleRenderVersion=0;
+ function openAiModule(key){
+  if(!aiModules[key])return;
+  var version=++aiModuleRenderVersion,content=$("aiModuleContent");
+  window.__srActiveAiModule=key;
+  $("aiPanel").style.display="none";
+  $("aiModulePanel").style.display="block";
+  $("aiModuleTitle").textContent=aiModules[key].title;
+  content.textContent="";
+  var note=document.createElement("div");
+  note.className="sr-note";
+  note.textContent="Local snapshot active · displaying cached/received evidence; unavailable feeds are not treated as safe.";
+  content.appendChild(note);
+  setTimeout(function(){if(version===aiModuleRenderVersion&&$("aiModulePanel").style.display==="block")renderAiModuleNow(key,true);},0);
  }
  function analysisStatusFor(key){var fn=SafeRouteAIEngine[key];return fn?fn.call(SafeRouteAIEngine).status:"NO RULES FUNCTION";}
  document.addEventListener("saferoute:telemetry-updated",function(){
@@ -1585,7 +1636,7 @@ html.sr-welcome-dismissed #srWelcome,#srWelcome[hidden]{display:none}
    openAiModule(window.__srActiveAiModule,true);
   }
  });
- document.querySelectorAll("[data-ai-module]").forEach(function(button){ button.addEventListener("click",function(){ openAiModule(button.dataset.aiModule); }); });
+ document.querySelectorAll("[data-ai-module]").forEach(function(button){ window.__srBindFastTap(button,function(){openAiModule(button.dataset.aiModule);}); });
  // AI integration boundary: context from real app state only; no service is connected.
  window.SafeRouteAI={ endpoint:null, connected:false,
   buildContext:function(){ var q=function(x){var n=document.querySelector(x);return n?n.textContent:null;};
@@ -1615,21 +1666,24 @@ html.sr-welcome-dismissed #srWelcome,#srWelcome[hidden]{display:none}
  window.__srOnDestination=function(name){ window.__srNavigationActive=false; window.__srPreview=false; $("startNavButton").style.display="none"; lbl.className="navDestLabel"; lbl.textContent="Calculating route to "+(name||"destination"); };
  window.__srOnRouteReady=function(){ if(!window.__srNavigationActive){ setPreview(true); } };
  window.__srOnStartNavigation=function(){ lbl.className="navDestLabel"; lbl.textContent="Navigating to "+(window.__srSelectedDestination&&window.__srSelectedDestination.name||"destination"); if(typeof announceRouteSummary==="function")announceRouteSummary(); };
- window.__srOnRouteCleared=function(){ window.__srNavigationActive=false; window.__srPreview=false; window.__srSelectingOrigin=false; $("startNavButton").style.display="none"; lbl.className="navDestLabel"; lbl.textContent="Route to destination"; };
- $("startNavButton").addEventListener("click",function(){
+ window.__srOnRouteCleared=function(){ window.__srNavigationActive=false; window.__srPreview=false; window.__srSelectingOrigin=false; $("startNavButton").style.display="none"; $("srNavigationBanner").setAttribute("aria-hidden","true"); $("srNavigationBanner").textContent=""; lbl.className="navDestLabel"; lbl.textContent="Route to destination"; };
+ window.__srBindFastTap($("startNavButton"),function(){
   if(!window.__srActiveRoute){
    showRouteError("No valid route is available yet.", "noroute");
    return;
   }
-  if(!Number.isFinite(lastUserLat) || !Number.isFinite(lastUserLon)) {
-   lbl.className="navDestLabel";
-   lbl.textContent="Route ready · live navigation needs GPS";
-   return;
-  }
-  window.__srNavigationActive=true; setPreview(false); if(typeof window.__srOnStartNavigation==="function")window.__srOnStartNavigation();
+  window.__srNavigationActive=true;setPreview(false);
+  var point=Number.isFinite(lastUserLat)&&Number.isFinite(lastUserLon)?{lat:lastUserLat,lon:lastUserLon}:{lat:window.__srActiveRoute.coordinates[0][1],lon:window.__srActiveRoute.coordinates[0][0]};
+  followModeEnabled=true;
+  if(window.__sr2dGetView&&window.__sr2dGetView().mode==="2d"&&window.__sr2dSetCenter)window.__sr2dSetCenter(point.lat,point.lon,false,16);
+  else if(typeof followCameraTo==="function")followCameraTo(point.lat,point.lon);
+  if(typeof window.__srOnStartNavigation==="function")window.__srOnStartNavigation();
+  var banner=$("srNavigationBanner"),instruction=window.__srActiveRoute.instructions[0];
+  banner.setAttribute("aria-hidden","false");
+  var isEstimate=String(window.__srActiveRoute.source||"").indexOf("Offline estimate")===0;
+  banner.textContent=(isEstimate?"APPROXIMATE PATH · NOT A VERIFIED ROAD ROUTE\n":"")+"NEXT TURN · "+(instruction&&instruction.text||"Continue along the route")+"\nRemaining "+window.__srFormatDistance(window.__srActiveRoute.totalDistanceM,2)+" · ETA "+Math.max(1,Math.round(window.__srActiveRoute.totalTimeMs/60000))+" min · "+(Number.isFinite(lastUserLat)&&Number.isFinite(lastUserLon)?"GPS active":"waiting for GPS");
  });
- $("clearRouteButton").addEventListener("click",function(){ window.__srPreview=false; window.__srNavigationActive=false; window.__srSelectingOrigin=false; $("startNavButton").style.display="none"; lbl.className="navDestLabel"; lbl.textContent="Route to destination"; });
- $("srRetryWeather").addEventListener("click",function(){ $("safetyChipText").textContent="Checking safety data…"; if(window.__srBridge) window.__srBridge.retryWeather(); });
+ $("srRetryWeather").addEventListener("click",function(){ $("safetyChipText").textContent="Cached values retained · refresh requested"; if(window.__srBridge) window.__srBridge.retryWeather(); });
  // OSM POI categories
  var poiBtns=document.querySelectorAll(".sr-cat[data-poi]");
  function msg(list,cls,title,sub,retry){ list.textContent=""; var d=document.createElement("div"); d.className="sr-state "+cls;
@@ -2516,12 +2570,12 @@ window.flyToUserLocation = function(lat, lon){
  });
 };
 window.__srNavigationStateReady = false;
-window.updateUserMarker = function(lat, lon){
+window.updateUserMarker = function(lat, lon, speedMps){
  console.log("Live GPS update -> LAT:", lat, "LON:", lon);
  addOrUpdateUserMarker(lat, lon);
  if (!window.__srNavigationStateReady) { return; }
  if (activeRoute) {
- trackNavigationProgress(lat, lon);
+ trackNavigationProgress(lat, lon, speedMps);
  }
  if (voiceEnabled) {
  checkHazardProximityVoice(lat, lon);
@@ -2671,7 +2725,7 @@ function nearestPointOnRoute(lat, lon, coordinates){
  lastNearestRouteIndex = nearestIndex;
  return { index: nearestIndex, distanceKm: nearestDistanceKm };
 }
-function trackNavigationProgress(lat, lon){
+function trackNavigationProgress(lat, lon, speedMps){
  if (window.__srPreview) { return; } // route preview: no voice/reroute/arrival until the user starts navigation
  const coordinates = activeRoute.coordinates;
  const nearest = nearestPointOnRoute(lat, lon, coordinates);
@@ -2696,6 +2750,18 @@ function trackNavigationProgress(lat, lon){
  const timeRow = document.querySelector("#routeInfoText .infoRow:nth-child(2) strong");
  if (distanceRow) { distanceRow.textContent = window.__srFormatDistance(remainingMeters, 2); }
  if (timeRow) { timeRow.textContent = remainingMin + " min"; }
+ const nextInstruction=activeRoute.instructions.find(function(instruction){
+  const index=instruction.interval&&instruction.interval.length?Number(instruction.interval[0]):null;
+  return index!==null&&index>=nearest.index;
+ });
+ const banner=document.getElementById("srNavigationBanner");
+ if(banner&&window.__srNavigationActive){
+  const speed=Number.isFinite(Number(speedMps))&&Number(speedMps)>=0?(Number(speedMps)*3.6).toFixed(1)+" km/h":"speed not reported";
+  const caution=activeRoute.risks&&activeRoute.risks.length?"\nCAUTION · "+activeRoute.risks[0].reason:"";
+  const approximate=String(activeRoute.source||"").indexOf("Offline estimate")===0;
+  banner.setAttribute("aria-hidden","false");
+  banner.textContent=(approximate?"APPROXIMATE PATH · NOT A VERIFIED ROAD ROUTE\n":"")+"NEXT TURN · "+(nextInstruction&&nextInstruction.text||"Continue to destination")+"\nRemaining "+window.__srFormatDistance(remainingMeters,2)+" · ETA "+Math.max(0,remainingMin)+" min · "+speed+caution;
+ }
  // Destination approach / arrival — real GraphHopper destination
  // coordinates, straight-line distance from live position. Each
  // fires exactly once per route (reset in selectAlternative).
@@ -3539,18 +3605,11 @@ function checkRouteRisk(coordinates){
  }
  }
  });
- // CONFIRMED secondary cost (this pass): previously scanned the FULL
- // route coordinate array per hazard zone, called once per route
- // alternative — for a long route × several zones × 2-3 alternatives,
- // this adds thousands of haversine calls on every route calculation,
- // including every auto-reroute. A hazard radius check doesn't need
- // per-meter precision (zones are km-scale), so the same bounded
- // sampling used for route height above is reused here.
- const riskCheckIndices = buildRouteHeightSampleIndices(coordinates.length);
+ // Check every provider coordinate so long routes are not simplified
+ // across a reference hazard corridor.
  activeZones.forEach(function(zone){
  let minDistance = Infinity;
- riskCheckIndices.forEach(function(i){
- const coord = coordinates[i];
+ coordinates.forEach(function(coord){
  const d = haversineDistanceKm(zone.lat, zone.lon, coord[1], coord[0]);
  if (d < minDistance) { minDistance = d; }
  });
@@ -3562,6 +3621,7 @@ function checkRouteRisk(coordinates){
 }
 function clearRoute(){
  routeRequestId++;
+ if(activeRouteController){activeRouteController.abort();activeRouteController=null;}
  inFlightRouteKey = null;
  if (destinationEntity) {
  viewer.entities.remove(destinationEntity);
@@ -3581,23 +3641,30 @@ function clearRoute(){
  }
  viewer.scene.requestRender();
  routeInfoPanel.style.display = "none";
+ routeInfoText.textContent = "";
  routeAlternatives = [];
  activeRoute = null;
  window.__srActiveRoute = null;
+ window.__srSelectedDestination = null;
+ window.__srNavigationActive = false;
+ window.__srPreview = false;
+ window.__srSelectingOrigin = false;
+ followModeEnabled = false;
+ lastNearestRouteIndex = null;
+ lastRouteRequest = null;
  lastSpokenInstructionIndex = -1;
  announcedApproachingDestination = false;
  announcedArrivedDestination = false;
  if (window.__sr2dSetRoute) { window.__sr2dSetRoute(null); }
  if (window.__sr2dSetRouteStart) { window.__sr2dSetRouteStart(null, null); }
  if (window.__sr2dSetDestination) { window.__sr2dSetDestination(null); }
+ if (typeof window.__srOnRouteCleared === "function") window.__srOnRouteCleared();
  if (window.speechSynthesis) {
  window.speechSynthesis.cancel();
  }
  console.log("Route cleared");
 }
-clearRouteButton.addEventListener("click", function(){
- clearRoute();
-});
+window.__srBindFastTap(clearRouteButton,clearRoute);
 window.__srHandleMapSelection = function(selection){
  if (!selection || !Number.isFinite(Number(selection.latitude)) || !Number.isFinite(Number(selection.longitude))) {
   return;
@@ -3663,6 +3730,7 @@ let announcedArrivedDestination = false;
 let routeRequestId = 0;
 let lastRouteRequest = null; // used only by the Try again button in the route error card
 let inFlightRouteKey = null; // prevents an identical duplicate route request while one is pending
+let activeRouteController = null;
 function calculateRoute(startLat,startLon,endLat,endLon){
  if(![startLat,startLon].every(Number.isFinite)){const origin=getRouteOrigin();startLat=origin.lat;startLon=origin.lon;}
  if(![endLat,endLon].every(Number.isFinite)||endLat < -90||endLat > 90||endLon < -180||endLon > 180){showRouteError("This place has invalid location data.","invalid_destination");return;}
@@ -3671,13 +3739,14 @@ function calculateRoute(startLat,startLon,endLat,endLon){
  inFlightRouteKey=routeKey;
  lastRouteRequest=[startLat,startLon,endLat,endLon];
  const requestId=++routeRequestId,url=buildRouteUrl(startLat,startLon,endLat,endLon),controller=new AbortController();
+ activeRouteController=controller;
  if(window.__sr2dSetRouteStart)window.__sr2dSetRouteStart(startLat,startLon);
  if(lastUserLat===null||lastUserLon===null){
   const position=Cesium.Cartesian3.fromDegrees(startLon,startLat,2);
   if(routeOriginEntity)routeOriginEntity.position=position;
   else routeOriginEntity=viewer.entities.add({position:position,point:{pixelSize:12,color:Cesium.Color.fromCssColorString("#3b82f6"),outlineColor:Cesium.Color.WHITE,outlineWidth:2,disableDepthTestDistance:Number.POSITIVE_INFINITY}});
  }else if(routeOriginEntity){viewer.entities.remove(routeOriginEntity);routeOriginEntity=null;}
- const timeout=setTimeout(function(){controller.abort();},5000);
+ const timeout=setTimeout(function(){controller.abort();},3800);
  fetch(url,{signal:controller.signal,headers:{"Accept":"application/json","User-Agent":"SafeRouteApp/1.0 (Android; offline-first navigation)"}})
  .then(function(response){if(!response.ok)throw new Error("OSRM returned HTTP "+response.status);return response.json();})
  .then(function(data){
@@ -3718,7 +3787,7 @@ function calculateRoute(startLat,startLon,endLat,endLon){
   routeAlternatives=[createOfflineRoute(startLat,startLon,endLat,endLon)];
   renderCalculatedRoute(endLat,endLon,requestId);
  })
- .finally(function(){clearTimeout(timeout);if(requestId===routeRequestId&&inFlightRouteKey===routeKey)inFlightRouteKey=null;});
+ .finally(function(){clearTimeout(timeout);if(activeRouteController===controller)activeRouteController=null;if(requestId===routeRequestId&&inFlightRouteKey===routeKey)inFlightRouteKey=null;});
 }
 function renderCalculatedRoute(endLat,endLon,requestId){
  if(requestId!==routeRequestId)return;
@@ -3845,7 +3914,7 @@ function renderRoutePanel(){
  const timeMin = Math.max(1, Math.round(alt.timeMs / 60000));
  let panelHtml = "<div class='infoRow'><span>Distance</span><strong>" + routeDistance + "</strong></div>" +
  "<div class='infoRow'><span>ETA</span><strong>" + timeMin + " min</strong></div>" +
- "<div class='sr-note'>" + escapeRouteHtml(activeRoute.source) + "</div>";
+ "<div class='sr-note'>" + escapeRouteHtml(activeRoute.source) + " · Elevation gain is not supplied by this routing provider.</div>";
  if (routeAlternatives.length > 1) {
  panelHtml += "<div class='altSelectorRow'>";
  routeAlternatives.forEach(function(a, i){
@@ -3891,7 +3960,7 @@ function renderRoutePanel(){
  });
  panelHtml += "<div style='color:rgba(255,255,255,0.5);font-size:10px;margin-top:6px;'>Calculated risk from known hazard data — not an official government alert.</div>";
  } else {
- panelHtml += "<div class='routeSectionDivider' style='color:#8fdc8f;font-weight:bold;'><svg class='sr-i sr-i-sm' aria-hidden='true'><use href='#i-check'/></svg> Route Safety: LOW — no known risk zones detected on this route</div>";
+ panelHtml += "<div class='routeSectionDivider' style='color:#8fdc8f;font-weight:bold;'><svg class='sr-i sr-i-sm' aria-hidden='true'><use href='#i-check'/></svg> No dated reference-zone overlap detected · live hazard coverage is incomplete</div>";
  }
  routeInfoText.innerHTML = panelHtml;
  routeInfoPanel.style.display = "block";
@@ -3914,7 +3983,8 @@ function announceRouteSummary(){
  const spokenDistance=distance.toFixed(2)+" kilometers";
  const timeMin = Math.max(1, Math.round(activeRoute.totalTimeMs / 60000));
  const startingDirection=directionFromCoordinates(activeRoute.coordinates,1);
- speak("Starting direction is " + startingDirection + ". Distance is " + spokenDistance + ". Estimated travel time is " + timeMin + " minutes.",true);
+ const approximate=String(activeRoute.source||"").indexOf("Offline estimate")===0;
+ speak((approximate?"Offline approximate path only; this is not a verified road route. ":"")+"Starting direction is " + startingDirection + ". "+(approximate?"Approximate distance is ":"Distance is ")+spokenDistance+". Estimated travel time is " + timeMin + " minutes.",true);
  if (activeRoute.risks && activeRoute.risks.length > 0) {
  activeRoute.risks.forEach(function(r){
  speak("Caution. " + r.reason + ".");
@@ -3941,23 +4011,6 @@ window.__toggleVoice = function(){
  }
  if(activeRoute)renderRoutePanel();
 };
-// Keep route-risk scans bounded; rendering itself uses the WGS84 route
-// geometry directly and lets Cesium clamp the line to the ground.
-const ROUTE_HEIGHT_SAMPLE_BUDGET = 120;
-function buildRouteHeightSampleIndices(totalPoints){
- if (totalPoints <= ROUTE_HEIGHT_SAMPLE_BUDGET) {
- // Short route — sample every point, nothing to save.
- const all = [];
- for (let i = 0; i < totalPoints; i++) { all.push(i); }
- return all;
-}
- const stride = (totalPoints - 1) / (ROUTE_HEIGHT_SAMPLE_BUDGET - 1);
- const indices = [];
- for (let i = 0; i < ROUTE_HEIGHT_SAMPLE_BUDGET; i++) {
- indices.push(Math.round(i * stride));
- }
- return indices;
-}
 function drawRoute(coordinates){
  if (!Array.isArray(coordinates)||coordinates.length<2) {
  console.error("Route geometry must contain at least two WGS84 coordinates.");
@@ -3978,7 +4031,7 @@ function drawRoute(coordinates){
  positions: positions,
  clampToGround: true,
  width: 8,
- material: Cesium.Color.fromCssColorString("#3b82f6")
+ material: Cesium.Color.fromCssColorString("#22c55e")
  }
  });
  viewer.scene.requestRender();
@@ -4147,7 +4200,7 @@ const weatherRiskText = document.getElementById("weatherRiskText");
 const safetySheetClose = document.getElementById("safetySheetClose");
 const safetyChip = document.getElementById("safetyChip");
 const safetyChipText = document.getElementById("safetyChipText");
-safetyChip.addEventListener("click", function(){
+window.__srBindFastTap(safetyChip,function(){
  const isOpen = weatherRiskPanel.style.display === "block";
  closeAllSheets();
  weatherRiskPanel.style.display = isOpen ? "none" : "block";
@@ -4737,8 +4790,8 @@ document.getElementById("cesiumContainer").style.visibility="hidden";
  ];
  var fallback={
   generatedAt:new Date().toISOString(),mode:"OFFLINE",source:"LOCAL_BASELINE",
-  corridors:corridors.map(function(c){return {district:c.district,name:c.name,lat:c.lat,lon:c.lon,road:c.road,weather:null,landslide_risk:"UNKNOWN",flood_risk:"UNKNOWN",river_discharge_m3s:null,air_quality:{us_aqi:null,pm2_5:null,pm10:null},traffic:{currentSpeed:null,freeFlowSpeed:null,delay_seconds:null,roadClosure:false,coordinates:[],status:"NO LIVE SAMPLE",color:"#94A3B8"}};}),
-  teesta:{name:"Teesta III Dam / Chungthang basin context",lat:27.528013,lon:88.5411727,status:"UNKNOWN",river_discharge_m3s:null},
+  corridors:corridors.map(function(c){return {district:c.district,name:c.name,lat:c.lat,lon:c.lon,road:c.road,weather:null,landslide_risk:"NO SAMPLE",flood_risk:"NO SAMPLE",river_discharge_m3s:null,air_quality:{us_aqi:null,pm2_5:null,pm10:null},traffic:{currentSpeed:null,freeFlowSpeed:null,delay_seconds:null,roadClosure:false,coordinates:[],status:"NO LIVE SAMPLE",color:"#94A3B8"}};}),
+  teesta:{name:"Teesta III Dam / Chungthang basin context",lat:27.528013,lon:88.5411727,status:"NO LIVE SAMPLE",river_discharge_m3s:null},
   tourism:[
    {circuit:"North Sikkim",destinations:["Lachung","Yumthang","Gurudongmar Lake"],status:"CAUTION",reason:"Offline baseline — ILP/PAP required; verify road weather."},
    {circuit:"East Sikkim Silk Route",destinations:["Tsomgo Lake","Baba Mandir","Nathula Pass"],status:"CAUTION",reason:"Offline baseline — permit and high-altitude weather required."},
@@ -4746,7 +4799,7 @@ document.getElementById("cesiumContainer").style.visibility="hidden";
    {circuit:"South Sikkim",destinations:["Ravangla Buddha Park","Namchi Char Dham"],status:"CAUTION",reason:"Offline baseline — verify Namchi/Rangpo corridor."}
   ]
  };
- var snapshot=null,cesiumEntities=[],hazardsEnabled=true,popup=null,badge=null;
+ var snapshot=null,cesiumEntities=[],hazardsEnabled=true,popup=null,badge=null,lastLiveFetchAt=0,lastLiveCell="";
 
  function addBadge(){
   if(badge)return;
@@ -4785,8 +4838,8 @@ document.getElementById("cesiumContainer").style.visibility="hidden";
   var traffic=c.traffic||{};
   var air=c.air_quality||{};
   popup.innerHTML="<strong>"+c.name+" · "+(c.road||"")+"</strong>"+
-   "Flood: "+(c.flood_risk||"UNKNOWN")+(c.river_discharge_m3s!=null?" · "+c.river_discharge_m3s.toFixed(1)+" m³/s":"")+
-   "<br>Landslide: "+(c.landslide_risk||"UNKNOWN")+
+   "Flood: "+(c.flood_risk||"NO SAMPLE")+(c.river_discharge_m3s!=null?" · "+c.river_discharge_m3s.toFixed(1)+" m³/s":"")+
+   "<br>Landslide: "+(c.landslide_risk||"NO SAMPLE")+
    "<br>AQI: "+(air.us_aqi!=null?air.us_aqi:"--")+" · PM2.5 "+(air.pm2_5!=null?air.pm2_5:"--")+" · PM10 "+(air.pm10!=null?air.pm10:"--")+
    "<br>Traffic: "+(traffic.status||"NO LIVE SAMPLE")+" · "+(traffic.currentSpeed!=null?traffic.currentSpeed+" km/h":"not reported")+" / "+(traffic.freeFlowSpeed!=null?traffic.freeFlowSpeed+" km/h":"not reported")+" · "+(traffic.delay_seconds!=null?Math.round(traffic.delay_seconds/60)+" min":"not reported");
   document.body.appendChild(popup);
@@ -4860,7 +4913,7 @@ document.getElementById("cesiumContainer").style.visibility="hidden";
   });
   if(snapshot.teesta){
    var teesta=snapshot.teesta;
-   cesiumEntities.push(viewer.entities.add({position:Cesium.Cartesian3.fromDegrees(teesta.lon,teesta.lat,180),point:{pixelSize:14,color:Cesium.Color.CYAN,outlineColor:Cesium.Color.WHITE,outlineWidth:2,disableDepthTestDistance:Number.POSITIVE_INFINITY},label:{text:"Teesta basin · "+(teesta.status||"UNKNOWN")+(teesta.river_discharge_m3s!=null?" · "+teesta.river_discharge_m3s.toFixed(1)+" m³/s":""),font:"12px sans-serif",fillColor:Cesium.Color.WHITE,outlineColor:Cesium.Color.BLACK,outlineWidth:3,style:Cesium.LabelStyle.FILL_AND_OUTLINE,pixelOffset:new Cesium.Cartesian2(0,-18),disableDepthTestDistance:Number.POSITIVE_INFINITY}}));
+   cesiumEntities.push(viewer.entities.add({position:Cesium.Cartesian3.fromDegrees(teesta.lon,teesta.lat,180),point:{pixelSize:14,color:Cesium.Color.CYAN,outlineColor:Cesium.Color.WHITE,outlineWidth:2,disableDepthTestDistance:Number.POSITIVE_INFINITY},label:{text:"Teesta basin · "+(teesta.status||"NO LIVE SAMPLE")+(teesta.river_discharge_m3s!=null?" · "+teesta.river_discharge_m3s.toFixed(1)+" m³/s":""),font:"12px sans-serif",fillColor:Cesium.Color.WHITE,outlineColor:Cesium.Color.BLACK,outlineWidth:3,style:Cesium.LabelStyle.FILL_AND_OUTLINE,pixelOffset:new Cesium.Cartesian2(0,-18),disableDepthTestDistance:Number.POSITIVE_INFINITY}}));
   }
   if(window.__srRequestCesiumRender)window.__srRequestCesiumRender();
  }
@@ -4868,11 +4921,21 @@ document.getElementById("cesiumContainer").style.visibility="hidden";
   snapshot=next||fallback;
   window.__srLiveSnapshot=snapshot;
   window.__srLiveSnapshotBadge=mode;
+  window.__srLiveState=Object.assign({},window.__srLiveState||{},{snapshot:snapshot,status:mode,updatedAt:Date.now()});
   setBadge(mode);
   render2D();
   render3D();
+  document.dispatchEvent(new CustomEvent("saferoute:live-state-updated"));
  }
  function fetchLive(){
+  var point=window.__srGetActiveTelemetryPoint&&window.__srGetActiveTelemetryPoint();
+  if(point&&Number.isFinite(point.lat)&&Number.isFinite(point.lon)){
+   var cell=(Math.round(point.lat*10)/10).toFixed(1)+":"+(Math.round(point.lon*10)/10).toFixed(1),elapsed=Date.now()-lastLiveFetchAt;
+   if(cell===lastLiveCell&&elapsed<60000)return;
+   if(lastLiveFetchAt&&elapsed<15000)return;
+   lastLiveCell=cell;
+  }else if(lastLiveFetchAt&&Date.now()-lastLiveFetchAt<60000)return;
+  lastLiveFetchAt=Date.now();
   var controller=new AbortController();
   var timeout=setTimeout(function(){controller.abort();},8000);
   fetch(window.__srBackendOrigin+"/api/hazards/live",{signal:controller.signal,headers:{Accept:"application/json"}})
@@ -4896,11 +4959,13 @@ document.getElementById("cesiumContainer").style.visibility="hidden";
   else setTimeout(fetchLive,120);
  };
  schedule();
- setInterval(fetchLive,15*60*1000);
+ setInterval(fetchLive,60*1000);
  var map=document.getElementById("sr2dMap");
  if(map){
   map.addEventListener("pointerup",function(){clearTimeout(map.__srHazardTimer);map.__srHazardTimer=setTimeout(render2D,40);});
   map.addEventListener("wheel",function(){clearTimeout(map.__srHazardTimer);map.__srHazardTimer=setTimeout(render2D,40);},{passive:true});
+  map.addEventListener("pointerup",function(){clearTimeout(map.__srLiveRefreshTimer);map.__srLiveRefreshTimer=setTimeout(fetchLive,800);},{passive:true});
+  map.addEventListener("wheel",function(){clearTimeout(map.__srLiveRefreshTimer);map.__srLiveRefreshTimer=setTimeout(fetchLive,800);},{passive:true});
   window.addEventListener("resize",render2D);
  }
  document.addEventListener("click",function(event){if(popup&&!popup.contains(event.target)&&!event.target.closest("#sr2dHazardOverlay"))clearPopup();});
@@ -4956,7 +5021,7 @@ document.getElementById("cesiumContainer").style.visibility="hidden";
  }
  function schedule(){
   if(timer)clearTimeout(timer);
-  timer=setTimeout(fetchForActivePoint,700);
+  timer=setTimeout(fetchForActivePoint,800);
  }
  function fetchForActivePoint(){
   var point=window.__srGetActiveTelemetryPoint&&window.__srGetActiveTelemetryPoint();
@@ -4997,7 +5062,82 @@ document.getElementById("cesiumContainer").style.visibility="hidden";
  if(window.__srViewer&&window.__srViewer.camera)window.__srViewer.camera.moveEnd.addEventListener(schedule);
  window.addEventListener("saferoute:telemetry-updated",render);
  setTimeout(schedule,400);
- setInterval(schedule,5*60*1000);
+ setInterval(schedule,60*1000);
+})();
+(function(){
+ "use strict";
+ var STATE_KEY="sr_live_state_v1",timer=null,inFlight=false,lastWarningAt=0,lastRefreshAt=0,lastCell="",retryAfter={};
+ var state={status:"OFFLINE · cached baseline",updatedAt:null,snapshot:null,point:null,assessment:null,nearby:{},endpointStatus:{}};
+ try{
+  var cached=JSON.parse(localStorage.getItem(STATE_KEY)||"null");
+  if(cached&&typeof cached==="object")state=Object.assign(state,cached);
+ }catch(error){console.warn("Live-state cache could not be read:",error.name);}
+ function syncFromMap(){
+  if(window.__srLiveSnapshot){state.snapshot=window.__srLiveSnapshot;state.status=window.__srLiveSnapshotBadge||state.status;}
+  if(window.__srPointTelemetry){
+   state.point=window.__srPointTelemetry;
+   state.weather=window.__srPointTelemetry.weather||null;
+   state.air_quality=window.__srPointTelemetry.air_quality||null;
+   state.flood=window.__srPointTelemetry.flood||null;
+  }
+  window.__srLiveState=state;
+ }
+ function persist(){
+  state.updatedAt=Date.now();
+  syncFromMap();
+  try{localStorage.setItem(STATE_KEY,JSON.stringify(state));}
+  catch(error){console.warn("Live-state cache could not be saved:",error.name);}
+  document.dispatchEvent(new CustomEvent("saferoute:backend-data-updated"));
+ }
+ function refresh(){
+  if(inFlight||!navigator.onLine)return;
+  var point=window.__srGetActiveTelemetryPoint&&window.__srGetActiveTelemetryPoint();
+  if(!point||!Number.isFinite(point.lat)||!Number.isFinite(point.lon))return;
+  var cell=(Math.round(point.lat*10)/10).toFixed(1)+":"+(Math.round(point.lon*10)/10).toFixed(1),elapsed=Date.now()-lastRefreshAt;
+  if(cell===lastCell&&elapsed<60000)return;
+  if(lastRefreshAt&&elapsed<15000)return;
+  lastCell=cell;lastRefreshAt=Date.now();
+  var query="lat="+encodeURIComponent(point.lat)+"&lon="+encodeURIComponent(point.lon)+"&radius=25000&limit=30";
+  var paths={
+   assessment:"/api/data/assessment?lat="+encodeURIComponent(point.lat)+"&lon="+encodeURIComponent(point.lon),
+   hazards:"/api/nearby/hazards?"+query,
+   tourism:"/api/nearby/tourism?"+query,
+   emergency:"/api/nearby/emergency?"+query
+  };
+  var keys=Object.keys(paths).filter(function(key){return !retryAfter[key]||retryAfter[key]<=Date.now();});
+  if(!keys.length)return;
+  inFlight=true;
+  var controller=new AbortController(),timeout=setTimeout(function(){controller.abort();},4000);
+  Promise.all(keys.map(function(key){
+   return fetch(window.__srBackendOrigin+paths[key],{signal:controller.signal,headers:{Accept:"application/json"}})
+    .then(function(response){
+     if(!response.ok)throw new Error("HTTP "+response.status);
+     return response.json();
+    })
+    .then(function(payload){if(key==="assessment")state.assessment=payload;else state.nearby[key]=payload;state.endpointStatus[key]="LIVE";delete retryAfter[key];})
+    .catch(function(error){
+     var hasCached=key==="assessment"?Boolean(state.assessment):Boolean(state.nearby[key]);
+     state.endpointStatus[key]=hasCached?"CACHED · REFRESH FAILED":error.name==="AbortError"?"TIMEOUT":"NO SAMPLE";
+     retryAfter[key]=Date.now()+(error.name==="AbortError"?60000:5*60*1000);
+     if(Date.now()-lastWarningAt>60000){console.warn("Background "+key+" refresh did not return data:",error.message);lastWarningAt=Date.now();}
+    });
+  })).then(persist).finally(function(){clearTimeout(timeout);inFlight=false;});
+ }
+ syncFromMap();
+ window.__srLiveState=state;
+ document.addEventListener("saferoute:telemetry-updated",persist);
+ document.addEventListener("saferoute:live-state-updated",persist);
+ document.addEventListener("saferoute:context",function(){
+  clearTimeout(timer);timer=setTimeout(refresh,800);
+ });
+ var map=document.getElementById("sr2dMap");
+ if(map){
+  map.addEventListener("pointerup",function(){clearTimeout(timer);timer=setTimeout(refresh,800);},{passive:true});
+  map.addEventListener("wheel",function(){clearTimeout(timer);timer=setTimeout(refresh,800);},{passive:true});
+ }
+ if(window.__srViewer&&window.__srViewer.camera)window.__srViewer.camera.moveEnd.addEventListener(function(){clearTimeout(timer);timer=setTimeout(refresh,800);});
+ setTimeout(refresh,150);
+ setInterval(refresh,60*1000);
 })();
 </script>
 </body>

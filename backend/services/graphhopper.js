@@ -192,72 +192,145 @@ function buildUpstreamUrl(startLat, startLon, endLat, endLon) {
   );
 }
 
-// SECURITY/RELIABILITY FIX (Phase 11B, Step 7 — confirmed missing on
-// direct inspection, despite an earlier session's claim otherwise): the
-// upstream GraphHopper call had NO timeout. A slow/hung upstream would
-// leave this fetch pending indefinitely, which — combined with the
-// in-flight dedup map — would permanently block ALL future requests
-// for that same start/end pair (inFlight.delete() in the .finally()
-// below would simply never run). 12s matches the client-side timeout
-// already in HelloWorld.html's calculateRoute(), so the two layers
-// agree on what "too slow" means.
-const GRAPHHOPPER_UPSTREAM_TIMEOUT_MS = 12000;
+// Bound both providers to one route deadline so a slow primary does not
+// make fallback routing exceed the mobile client timeout.
+const ROUTE_TOTAL_TIMEOUT_MS = 3800;
+const GRAPHHOPPER_TIMEOUT_MS = 1800;
+const OSRM_URL = "https://router.project-osrm.org/route/v1/driving/";
+
+function convertOsrmRoute(data) {
+  if (!data || data.code === "NoRoute") return { paths: [] };
+  const route = Array.isArray(data.routes) && data.routes[0];
+  const coordinates = route && route.geometry && route.geometry.coordinates;
+  if (data.code !== "Ok" || !route || !Array.isArray(coordinates) || coordinates.length < 2) {
+    return null;
+  }
+  if (!Number.isFinite(Number(route.distance)) || Number(route.distance) < 0 ||
+      !Number.isFinite(Number(route.duration)) || Number(route.duration) < 0) return null;
+  if (!coordinates.every((point) =>
+    Array.isArray(point) && Number.isFinite(point[0]) && Number.isFinite(point[1]) &&
+    point[0] >= -180 && point[0] <= 180 && point[1] >= -90 && point[1] <= 90
+  )) return null;
+
+  const instructions = [];
+  let cursor = 0;
+  for (const leg of route.legs || []) {
+    for (const step of leg.steps || []) {
+      const stepCoordinates = step.geometry && step.geometry.coordinates;
+      const first = Array.isArray(stepCoordinates) && stepCoordinates[0];
+      const last = Array.isArray(stepCoordinates) && stepCoordinates[stepCoordinates.length - 1];
+      let startIndex = cursor;
+      let endIndex = cursor;
+      if (first) {
+        const found = coordinates.findIndex((point, index) =>
+          index >= cursor && Math.abs(point[0] - first[0]) < 0.00001 &&
+          Math.abs(point[1] - first[1]) < 0.00001
+        );
+        if (found >= 0) startIndex = found;
+      }
+      if (last) {
+        const found = coordinates.findIndex((point, index) =>
+          index >= startIndex && Math.abs(point[0] - last[0]) < 0.00001 &&
+          Math.abs(point[1] - last[1]) < 0.00001
+        );
+        if (found >= 0) endIndex = found;
+      }
+      cursor = Math.max(startIndex, endIndex);
+      const maneuver = step.maneuver || {};
+      const modifier = maneuver.modifier ? ` ${maneuver.modifier.replace(/_/g, " ")}` : "";
+      const roadName = step.name ? ` onto ${step.name}` : "";
+      const text = maneuver.type === "depart"
+        ? `Head${modifier}${roadName}`
+        : maneuver.type === "arrive"
+          ? "Arrive at your destination"
+          : `${maneuver.type || "Continue"}${modifier}${roadName}`;
+      instructions.push({
+        text,
+        distance: Number.isFinite(Number(step.distance)) ? Number(step.distance) : 0,
+        time: Number.isFinite(Number(step.duration)) ? Number(step.duration) * 1000 : 0,
+        interval: [startIndex, endIndex],
+      });
+    }
+  }
+  return {
+    provider: "OSRM",
+    paths: [{
+      distance: Number(route.distance),
+      time: Number(route.duration) * 1000,
+      points: { type: "LineString", coordinates },
+      instructions: instructions.length ? instructions : [{
+        text: "Continue to your destination",
+        distance: Number(route.distance),
+        time: Number(route.duration) * 1000,
+        interval: [0],
+      }],
+    }],
+  };
+}
+
+async function fetchOsrmRoute(startLat, startLon, endLat, endLon, timeoutMs) {
+  if (timeoutMs <= 0) return null;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  const url = OSRM_URL +
+    `${startLon},${startLat};${endLon},${endLat}?overview=full&steps=true&geometries=geojson`;
+  try {
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers: { Accept: "application/json", "User-Agent": "SafeRoute/1.0 (routing fallback)" },
+    });
+    if (!response.ok) return null;
+    return convertOsrmRoute(await response.json());
+  } catch (error) {
+    console.warn("[routing] OSRM fallback did not return a route:", error.name);
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 
 async function fetchFromUpstream(startLat, startLon, endLat, endLon) {
   const url = buildUpstreamUrl(startLat, startLon, endLat, endLon);
-  if (!url) {
-    console.warn("[graphhopper] no live routing backend configured; returning a truthful no-route response.");
-    return buildFallbackRouteResponse({ reason: "no_provider" });
-  }
+  const deadline = Date.now() + ROUTE_TOTAL_TIMEOUT_MS;
+  let fallbackReason = url ? "upstream_error" : "no_provider";
+  let fallbackStatus = url ? 502 : null;
 
-  const abortController = new AbortController();
-  const timeoutHandle = setTimeout(() => abortController.abort(), GRAPHHOPPER_UPSTREAM_TIMEOUT_MS);
-
-  let response;
-  try {
-    response = await fetch(url, { signal: abortController.signal });
-  } catch (err) {
-    if (err.name === "AbortError") {
-      const timeoutErr = new Error(
-        `Upstream routing service did not respond within ${GRAPHHOPPER_UPSTREAM_TIMEOUT_MS}ms`
-      );
-      timeoutErr.upstreamStatus = 504;
-      console.warn("[graphhopper] route upstream timed out; returning a truthful no-route response.");
-      return buildFallbackRouteResponse({ reason: "upstream_timeout", upstreamStatus: 504 });
+  if (url) {
+    const controller = new AbortController();
+    const timeoutMs = Math.min(GRAPHHOPPER_TIMEOUT_MS, Math.max(1, deadline - Date.now()));
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await fetch(url, { signal: controller.signal });
+      if (response.ok) {
+        const data = await response.json();
+        if (hasValidRouteGeometry(data)) return data;
+        fallbackReason = data && Array.isArray(data.paths) && data.paths.length === 0
+          ? "route_not_found"
+          : "invalid_upstream_response";
+      } else {
+        fallbackStatus = response.status;
+        fallbackReason = response.status === 400 ? "route_not_found" : "upstream_error";
+      }
+    } catch (error) {
+      fallbackReason = error.name === "AbortError"
+        ? "upstream_timeout"
+        : error instanceof SyntaxError ? "invalid_upstream_response" : "upstream_error";
+      fallbackStatus = error.name === "AbortError" ? 504 : 502;
+      console.warn("[graphhopper] primary routing request failed; trying OSRM fallback:", error.name);
+    } finally {
+      clearTimeout(timeout);
     }
-    console.warn("[graphhopper] route upstream fetch failed; returning a truthful no-route response.", err.message);
-    return buildFallbackRouteResponse({ reason: "upstream_error", upstreamStatus: 502 });
-  } finally {
-    clearTimeout(timeoutHandle);
   }
 
-  if (!response.ok) {
-    const bodyText = await response.text().catch(() => "");
-    if (response.status === 400) {
-      console.info("[graphhopper] no route exists inside the loaded graph coverage for this request.");
-      return {
-        paths: [],
-        message: "No drivable route was found within the loaded road graph coverage.",
-      };
-    }
-    const err = new Error(
-      `Upstream routing service returned HTTP ${response.status}`
-    );
-    err.upstreamStatus = response.status;
-    err.upstreamBody = bodyText;
-    console.warn("[graphhopper] upstream responded with an error; returning a truthful no-route response.", err.message);
-    return buildFallbackRouteResponse({ reason: "upstream_error", upstreamStatus: response.status });
+  const osrm = await fetchOsrmRoute(startLat, startLon, endLat, endLon, deadline - Date.now());
+  if (osrm) return osrm;
+  if (fallbackReason === "route_not_found") {
+    return { paths: [], message: "No drivable route was found by the configured routing providers." };
   }
-
-  try {
-    return await response.json();
-  } catch (err) {
-    console.warn("[graphhopper] upstream returned invalid JSON; refusing to treat it as a route.");
-    return buildFallbackRouteResponse({
-      reason: "invalid_upstream_response",
-      upstreamStatus: 502,
-    });
-  }
+  return buildFallbackRouteResponse({
+    reason: fallbackReason,
+    ...(fallbackStatus ? { upstreamStatus: fallbackStatus } : {}),
+  });
 }
 
 // Public entry point used by routes/route.js.
