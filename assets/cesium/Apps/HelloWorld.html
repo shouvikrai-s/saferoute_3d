@@ -791,6 +791,7 @@ input:focus-visible{
 .sr-cat[data-ai-module],#aiMonitorButton,#mapAiMonitorButton,#safetyChip,#navSafety{touch-action:manipulation;pointer-events:auto}
 #aiMonitorButton{z-index:16001}
 #aiPanel,#aiModulePanel,#mapControlsPanel,#weatherRiskPanel{pointer-events:auto}
+body.sr-modal-open #aiMonitorButton{opacity:0;visibility:hidden;pointer-events:none;transform:translateY(4px)}
 @media (min-width:768px){
  .sr-sheet,#routeInfoPanel{ left:50% !important; right:auto !important; width:min(560px,100%); transform:translateX(-50%); }
  #srNav{ justify-content:center; } #srNav button{ max-width:200px; }
@@ -1166,6 +1167,16 @@ html.sr-welcome-dismissed #srWelcome,#srWelcome[hidden]{display:none}
 <script>
 (function(){
  var $=function(i){return document.getElementById(i);};
+ window.__srLiveState=window.__srLiveState||{point:null,snapshot:null,status:"OFFLINE BASELINE",updatedAt:null};
+ function liveState(){return window.__srLiveState||{};}
+ function pointTelemetrySnapshot(){return liveState().point||null;}
+ function liveHazardSnapshot(){
+  var state=liveState(),timestamp=Number(state.snapshotUpdatedAt);
+  if((state.status==="LIVE ONLINE"||state.status==="OFFLINE MODE (CACHED SNAPSHOT)")&&
+   (!Number.isFinite(timestamp)||Date.now()-timestamp<0||Date.now()-timestamp>5*60*1000))return null;
+  return state.snapshot||null;
+ }
+ window.__srGetLiveState=liveState;
  function haversineDistanceKm(lat1,lon1,lat2,lon2){
   var rad=Math.PI/180,dLat=(lat2-lat1)*rad,dLon=(lon2-lon1)*rad;
   var a=Math.sin(dLat/2)*Math.sin(dLat/2)+Math.cos(lat1*rad)*Math.cos(lat2*rad)*Math.sin(dLon/2)*Math.sin(dLon/2);
@@ -1189,15 +1200,26 @@ html.sr-welcome-dismissed #srWelcome,#srWelcome[hidden]{display:none}
  var SR_PANELS=["osmSearchPanel","weatherRiskPanel","permitPanel","helplinePanel","profilePanel","aiPanel","aiModulePanel","mapControlsPanel"];
  function hideAll(){ SR_PANELS.forEach(function(id){ $(id).style.display="none"; }); }
  function hideProfile(){ $("profilePanel").style.display="none"; $("aiPanel").style.display="none"; $("aiModulePanel").style.display="none"; }
+ function syncFloatingMonitor(){
+  var ids=SR_PANELS.concat(["routeInfoPanel"]);
+  var expanded=ids.some(function(id){var panel=$(id);return panel&&panel.style.display==="block";});
+  var welcome=$("srWelcome");
+  if(welcome&&!welcome.hidden&&getComputedStyle(welcome).display!=="none")expanded=true;
+  document.body.classList.toggle("sr-modal-open",expanded);
+ }
  function sync(){
   var cur="navMap";
   if($("osmSearchPanel").style.display==="block") cur="navExplore";
   if($("weatherRiskPanel").style.display==="block") cur="navSafety";
   ["navMap","navExplore","navSafety"].forEach(function(id){ if(id===cur) $(id).setAttribute("aria-current","page"); else $(id).removeAttribute("aria-current"); });
+  syncFloatingMonitor();
  }
  SR_PANELS.forEach(function(id){
   new MutationObserver(sync).observe($(id),{attributes:true,attributeFilter:["style"]});
  });
+ new MutationObserver(syncFloatingMonitor).observe($("routeInfoPanel"),{attributes:true,attributeFilter:["style"]});
+ new MutationObserver(syncFloatingMonitor).observe(document.documentElement,{attributes:true,attributeFilter:["class"]});
+ syncFloatingMonitor();
  window.__srBindFastTap($("navMap"),function(){hideAll();sync();});
  window.__srBindFastTap($("navExplore"),function(){hideProfile();if($("osmSearchPanel").style.display!=="block")$("osmSearchButton").click();});
  window.__srBindFastTap($("navSafety"),function(){var open=$("weatherRiskPanel").style.display==="block";hideAll();if(!open)$("weatherRiskPanel").style.display="block";sync();});
@@ -1206,17 +1228,17 @@ html.sr-welcome-dismissed #srWelcome,#srWelcome[hidden]{display:none}
  $("distanceUnitPreference").value=window.SafeRoutePreferences.getDistanceUnit();
  $("distanceUnitPreference").addEventListener("change",function(){ window.SafeRoutePreferences.setDistanceUnit(this.value); });
  window.__srBindFastTap($("mapControlsButton"),function(){var o=$("mapControlsPanel").style.display==="block";hideAll();$("mapControlsPanel").style.display=o?"none":"block";sync();});
- function openAiCenter(){
-  hideAll(); $("aiPanel").style.display="block"; sync();
+ function renderAiCenterSummary(){
   var summary=$("aiCenterSummary");
-  summary.textContent="Local snapshot ready · refreshed telemetry updates silently in the background.";
-  setTimeout(function(){
-   if($("aiPanel").style.display!=="block")return;
-   var live=SafeRouteAIEngine.live(),rows=[["MAP",SafeRouteAIEngine.map()],["ROUTE",live.route],["TRAFFIC",live.traffic],["WEATHER",live.weather],["AIR QUALITY",live.air],["FLOOD",live.flood],["DAM",live.dam],["HAZARDS",live.hazards],["LANDSLIDE",SafeRouteAIEngine.landslide()],["SAFETY",SafeRouteAIEngine.safety()],["TOURISM",SafeRouteAIEngine.tourism()],["EMERGENCY",SafeRouteAIEngine.emergency()],["GPS",live.gps]];
-   summary.textContent="";
-   var note=document.createElement("span");note.className="sr-tag";note.textContent="LOCAL RULES · DATA SOURCE AND FRESHNESS LABELLED";summary.appendChild(note);
-   rows.forEach(function(row){var d=document.createElement("div"),c=document.createElement("div"),s=document.createElement("strong"),v=document.createElement("small");d.className="sr-control-row";c.className="sr-control-copy";s.textContent=row[0]+" · "+row[1].status;v.textContent="Checked "+row[1].timestamp+" · "+row[1].reason;c.appendChild(s);c.appendChild(v);d.appendChild(c);summary.appendChild(d);});
-  },0);
+  var live=SafeRouteAIEngine.live(),rows=[["MAP",SafeRouteAIEngine.map()],["ROUTE",live.route],["TRAFFIC",live.traffic],["WEATHER",live.weather],["AIR QUALITY",live.air],["FLOOD",live.flood],["DAM",live.dam],["HAZARDS",live.hazards],["LANDSLIDE",SafeRouteAIEngine.landslide()],["SAFETY",SafeRouteAIEngine.safety()],["TOURISM",SafeRouteAIEngine.tourism()],["EMERGENCY",SafeRouteAIEngine.emergency()],["GPS",live.gps]];
+  summary.textContent="";
+  var note=document.createElement("span");note.className="sr-tag";note.textContent="LOCAL RULES · DATA SOURCE AND FRESHNESS LABELLED";summary.appendChild(note);
+  rows.forEach(function(row){var d=document.createElement("div"),c=document.createElement("div"),s=document.createElement("strong"),v=document.createElement("small");d.className="sr-control-row";c.className="sr-control-copy";s.textContent=row[0]+" · "+row[1].status;v.textContent="Checked "+row[1].timestamp+" · "+row[1].reason;c.appendChild(s);c.appendChild(v);d.appendChild(c);summary.appendChild(d);});
+ }
+ function openAiCenter(){
+  warmLiveMetrics();
+  hideAll(); $("aiPanel").style.display="block"; sync();
+  renderAiCenterSummary();
  }
  window.__srBindFastTap($("aiMonitorButton"),openAiCenter);
  window.__srBindFastTap($("mapAiMonitorButton"),openAiCenter);
@@ -1239,15 +1261,18 @@ html.sr-welcome-dismissed #srWelcome,#srWelcome[hidden]{display:none}
   var node=$(selector); return node && node.textContent.trim() ? node.textContent.trim() : fallback;
  }
  function trafficEvidence(manager){
-  var now=Date.now(),samples=0,tileCount=0,newest=0;
+  var now=Date.now(),ttl=manager&&manager.options&&manager.options.tileTtlMs||120000,samples=0,tileCount=0,newest=0,visited=0;
   if(manager&&manager.cache){manager.cache.forEach(function(entry){
    var data=entry.data;
    if(!data||!data.decoded||!Array.isArray(data.features)||!entry.timestamp)return;
+   var age=now-Number(entry.timestamp);
+   if(age<0||age>ttl)return;
+   if(visited>=3000)return;
    tileCount++;newest=Math.max(newest,Number(entry.timestamp)||0);
-   data.features.forEach(function(feature){
-    var value=Number(feature.properties&&feature.properties.relative_speed);
+   for(var index=0;index<data.features.length&&visited<3000;index++,visited++){
+    var value=Number(data.features[index].properties&&data.features[index].properties.relative_speed);
     if(Number.isFinite(value)&&value>=0&&value<=1)samples++;
-   });
+   }
   });}
   return {samples:samples,tileCount:tileCount,newest:newest,ageMs:newest?now-newest:Infinity};
  }
@@ -1259,9 +1284,8 @@ html.sr-welcome-dismissed #srWelcome,#srWelcome[hidden]{display:none}
     ?{state:"LIVE",detail:corridor.record.name+" corridor · "+traffic.currentSpeed+" km/h current speed"+(traffic.freeFlowSpeed!=null?" / "+traffic.freeFlowSpeed+" km/h free flow":"")+(traffic.delay_seconds!=null?" · "+Math.round(traffic.delay_seconds/60)+" min delay":"")}
     :{state:"NO SAMPLE",detail:"No current TomTom speed observation is available for this view."};
   }
-  var evidence=trafficEvidence(manager),ttl=manager.options&&manager.options.tileTtlMs||120000;
+  var evidence=trafficEvidence(manager);
   if(evidence.samples>0){
-   if(evidence.ageMs>ttl)return {state:"STALE",detail:evidence.samples+" decoded observation(s) from "+evidence.tileCount+" cached tile(s) are older than "+Math.round(ttl/1000)+"s; not rendered as current"};
    var state=manager.enabled?"RECENT":"CACHED";
    return {state:state,detail:evidence.samples+" decoded relative_speed observation(s) from "+evidence.tileCount+" tile(s); age "+Math.max(0,Math.round(evidence.ageMs/1000))+"s"};
   }
@@ -1269,7 +1293,7 @@ html.sr-welcome-dismissed #srWelcome,#srWelcome[hidden]{display:none}
   if(manager.stats&&manager.stats.loaded>0)return {state:"NO SAMPLE",detail:"Loaded tiles contained no fresh decoded relative_speed observations"};
   if(manager.enabled&&(manager.activeRequests>0||manager.queue.length>0))return {state:"PROCESSING",detail:"No validated traffic sample received yet"};
   var nearest=nearestLiveCorridor(telemetryPoint()), flow=nearest&&nearest.record.traffic;
-  if(flow&&flow.currentSpeed!=null&&Number.isFinite(Number(flow.currentSpeed)))return {state:window.__srLiveSnapshotBadge==="LIVE ONLINE"?"LIVE":"CACHED",detail:nearest.record.name+" corridor · "+flow.currentSpeed+" km/h"+(flow.freeFlowSpeed!=null?" / "+flow.freeFlowSpeed+" km/h":"")};
+  if(flow&&flow.currentSpeed!=null&&Number.isFinite(Number(flow.currentSpeed)))return {state:liveState().status==="LIVE ONLINE"?"LIVE":"CACHED",detail:nearest.record.name+" corridor · "+flow.currentSpeed+" km/h"+(flow.freeFlowSpeed!=null?" / "+flow.freeFlowSpeed+" km/h":"")};
   return {state:"NO SAMPLE",detail:manager.enabled?"No usable traffic observation has loaded":"Traffic layer is off; corridor telemetry is checked when available"};
  }
  window.__srUpdateTrafficLegend=function(){
@@ -1279,7 +1303,6 @@ html.sr-welcome-dismissed #srWelcome,#srWelcome[hidden]{display:none}
   legend.setAttribute("aria-hidden",String(!enabled));
   var evidence=trafficEvidence(manager),state=aiTrafficState();
   if(!enabled){freshness.textContent="Traffic layer off · no segments colored.";return;}
-  if(state.state==="STALE"){freshness.textContent="STALE · "+state.detail+" · gray/no current segment coverage." ;return;}
   if(evidence.samples>0){freshness.textContent=state.state+" · "+evidence.samples+" valid observation(s), "+evidence.tileCount+" tile(s) · newest proxy receipt "+Math.max(0,Math.round(evidence.ageMs/1000))+"s ago · "+state.detail;return;}
   freshness.textContent=state.state+" · "+state.detail+" · Unobserved roads are not classified.";
  };
@@ -1307,7 +1330,7 @@ html.sr-welcome-dismissed #srWelcome,#srWelcome[hidden]{display:none}
  }
  window.__srGetActiveTelemetryPoint=telemetryPoint;
  function nearestLiveCorridor(point){
-  var corridors=window.__srLiveSnapshot&&window.__srLiveSnapshot.corridors||[];
+  var snapshot=liveHazardSnapshot(),corridors=snapshot&&snapshot.corridors||[];
   if(!point||!corridors.length)return null;
   var closest=null;
   corridors.forEach(function(corridor){
@@ -1317,30 +1340,30 @@ html.sr-welcome-dismissed #srWelcome,#srWelcome[hidden]{display:none}
   return closest;
  }
  function pointTelemetryStatus(){
-  var telemetry=window.__srPointTelemetry;
+  var telemetry=pointTelemetrySnapshot();
   if(!telemetry)return "NO SAMPLE";
-  return telemetry.cache&&telemetry.cache.stale?"CACHED · STALE":telemetry.cache&&telemetry.cache.hit?"CACHED":"LIVE";
+  return telemetry.cache&&telemetry.cache.hit?"CACHED":"LIVE";
  }
  function pointWeather(){
-  var telemetry=window.__srPointTelemetry;
+  var telemetry=pointTelemetrySnapshot();
   if(telemetry&&telemetry.weather)return {weather:telemetry.weather,status:pointTelemetryStatus(),source:"Open-Meteo Forecast"};
   var corridor=nearestLiveCorridor(telemetryPoint());
-  if(corridor&&corridor.record.weather)return {weather:Object.assign({},corridor.record.weather,{precipitation_24h_mm:corridor.record.weather.precipitation_24h_mm!=null?corridor.record.weather.precipitation_24h_mm:corridor.record.weather.precipitation_sum_24h}),status:window.__srLiveSnapshotBadge==="LIVE ONLINE"?"LIVE":"CACHED",source:"Open-Meteo Forecast · "+corridor.record.name};
+  if(corridor&&corridor.record.weather)return {weather:Object.assign({},corridor.record.weather,{precipitation_24h_mm:corridor.record.weather.precipitation_24h_mm!=null?corridor.record.weather.precipitation_24h_mm:corridor.record.weather.precipitation_sum_24h}),status:liveState().status==="LIVE ONLINE"?"LIVE":"CACHED",source:"Open-Meteo Forecast · "+corridor.record.name};
   var readings=window.__srLatestWeatherResults||[];
   if(readings.length)return {weather:{current_precipitation_mm:Math.max.apply(null,readings.map(function(value){return Number(value.precipitation)||0;}))},status:"LIVE",source:"Open-Meteo current precipitation"};
   return {weather:null,status:"NO SAMPLE",source:"Open-Meteo Forecast"};
  }
  function pointAirQuality(){
-  var telemetry=window.__srPointTelemetry;
+  var telemetry=pointTelemetrySnapshot();
   if(telemetry&&telemetry.air_quality)return {air:telemetry.air_quality,status:pointTelemetryStatus(),source:"Open-Meteo Air Quality"};
   var corridor=nearestLiveCorridor(telemetryPoint()), air=corridor&&corridor.record.air_quality;
-  return air?{air:air,status:window.__srLiveSnapshotBadge==="LIVE ONLINE"?"LIVE":"CACHED",source:"Open-Meteo Air Quality · "+corridor.record.name}:{air:null,status:"NO SAMPLE",source:"Open-Meteo Air Quality"};
+  return air?{air:air,status:liveState().status==="LIVE ONLINE"?"LIVE":"CACHED",source:"Open-Meteo Air Quality · "+corridor.record.name}:{air:null,status:"NO SAMPLE",source:"Open-Meteo Air Quality"};
  }
  function pointFlood(){
-  var telemetry=window.__srPointTelemetry;
+  var telemetry=pointTelemetrySnapshot();
   if(telemetry&&telemetry.flood)return {flood:telemetry.flood,status:pointTelemetryStatus(),source:"Open-Meteo GloFAS"};
   var corridor=nearestLiveCorridor(telemetryPoint()), record=corridor&&corridor.record;
-  return record?{flood:{river_discharge_m3s:record.river_discharge_m3s,flood_risk:record.flood_risk},status:window.__srLiveSnapshotBadge==="LIVE ONLINE"?"LIVE":"CACHED",source:"Open-Meteo GloFAS · "+record.name}:{flood:null,status:"NO SAMPLE",source:"Open-Meteo GloFAS"};
+  return record?{flood:{river_discharge_m3s:record.river_discharge_m3s,flood_risk:record.flood_risk},status:liveState().status==="LIVE ONLINE"?"LIVE":"CACHED",source:"Open-Meteo GloFAS · "+record.name}:{flood:null,status:"NO SAMPLE",source:"Open-Meteo GloFAS"};
  }
  function riskTier(score){
   if(!Number.isFinite(score))return "INSUFFICIENT DATA";
@@ -1368,7 +1391,7 @@ html.sr-welcome-dismissed #srWelcome,#srWelcome[hidden]{display:none}
   if(!air)return this.result("NO SAMPLE","UNKNOWN",0,"UNKNOWN","No current pollutant sample was returned for the active position. Values are not substituted or inferred.","Retry when connected; visibility itself is not measured.","Current map or route position",[sample.source]);
   var aqi=air.us_aqi==null?null:Math.min(100,Number(air.us_aqi)/3);
   return resultWithScore(this.result(sample.status,air.advisory_tier||"NO SAMPLE",0,air.advisory_tier||"UNKNOWN",
-   "US AQI "+(air.us_aqi==null?"not reported":air.us_aqi)+" · European AQI "+(air.european_aqi==null?"not reported":air.european_aqi)+" · PM2.5 "+(air.pm2_5==null?"not reported":air.pm2_5)+" µg/m³ · PM10 "+(air.pm10==null?"not reported":air.pm10)+" µg/m³ · O₃ "+(air.ozone==null?"not reported":air.ozone)+" · NO₂ "+(air.nitrogen_dioxide==null?"not reported":air.nitrogen_dioxide)+" · CO "+(air.carbon_monoxide==null?"not reported":air.carbon_monoxide)+" µg/m³. "+(air.visibility_impact||"Visibility is not measured."),
+   "US AQI "+(air.us_aqi==null?"No sample":air.us_aqi)+" · European AQI "+(air.european_aqi==null?"No sample":air.european_aqi)+" · PM2.5 "+(air.pm2_5==null?"No sample":air.pm2_5)+" µg/m³ · PM10 "+(air.pm10==null?"No sample":air.pm10)+" µg/m³ · O₃ "+(air.ozone==null?"No sample":air.ozone)+" · NO₂ "+(air.nitrogen_dioxide==null?"No sample":air.nitrogen_dioxide)+" · CO "+(air.carbon_monoxide==null?"No sample":air.carbon_monoxide)+" µg/m³. "+(air.visibility_impact||"Visibility is not measured."),
    "Use the AQI advisory as regional context; it is not a site sensor or visibility measurement.","Active position · "+sample.status,[sample.source]),aqi);
  };
  LocalDataGroundedEngine.prototype.weather=function(){
@@ -1376,7 +1399,7 @@ html.sr-welcome-dismissed #srWelcome,#srWelcome[hidden]{display:none}
   if(!weather)return this.result("NO SAMPLE","UNKNOWN",0,"UNKNOWN","No current weather sample is available for the active position.","Retry when connected; missing measurements do not indicate clear conditions.","Current map or route position",[sample.source]);
   var rain=weather.precipitation_24h_mm,score=rain==null?null:Math.min(100,Number(rain));
   return resultWithScore(this.result(sample.status,score===null?"UNKNOWN":riskTier(score),0,score===null?"UNKNOWN":riskTier(score),
-   "Temperature "+(weather.temperature_2m==null?"not reported":weather.temperature_2m+" °C")+" · rainfall 1h "+(weather.precipitation_1h_mm==null?"not reported":weather.precipitation_1h_mm+" mm")+" · 24h "+(weather.precipitation_24h_mm==null?"not reported":weather.precipitation_24h_mm+" mm")+" · 72h "+(weather.precipitation_72h_mm==null?"not reported":weather.precipitation_72h_mm+" mm")+" · 7d "+(weather.precipitation_7d_mm==null?"not reported":weather.precipitation_7d_mm+" mm")+" · deep soil moisture "+(weather.soil_moisture_27_to_81cm==null?"not reported":weather.soil_moisture_27_to_81cm+" m³/m³")+". Screening context, not an official warning.",
+   "Temperature "+(weather.temperature_2m==null?"No sample":weather.temperature_2m+" °C")+" · humidity "+(weather.relative_humidity_2m==null?"No sample":weather.relative_humidity_2m+"%")+" · wind "+(weather.wind_speed_10m==null?"No sample":weather.wind_speed_10m+" km/h")+" · rainfall 1h "+(weather.precipitation_1h_mm==null?"No sample":weather.precipitation_1h_mm+" mm")+" · 24h "+(weather.precipitation_24h_mm==null?"No sample":weather.precipitation_24h_mm+" mm")+" · 72h "+(weather.precipitation_72h_mm==null?"No sample":weather.precipitation_72h_mm+" mm")+" · 7d "+(weather.precipitation_7d_mm==null?"No sample":weather.precipitation_7d_mm+" mm")+" · deep soil moisture "+(weather.soil_moisture_27_to_81cm==null?"No sample":weather.soil_moisture_27_to_81cm+" m³/m³")+". Screening context, not an official warning.",
    "Check current official alerts before travel; rainfall alone does not establish a flood or landslide.","Active position · "+sample.status,[sample.source]),score);
  };
  LocalDataGroundedEngine.prototype.flood=function(){
@@ -1387,24 +1410,30 @@ html.sr-welcome-dismissed #srWelcome,#srWelcome[hidden]{display:none}
    ?Math.round(Math.min(100,Number(weather.precipitation_72h_mm)/150*70+(weather.soil_moisture_27_to_81cm==null?0:Math.max(0,Math.min(1,Number(weather.soil_moisture_27_to_81cm)))*30)))
    :null;
   return resultWithScore(this.result(sample.status,flood.flood_risk||"UNKNOWN",0,flood.flood_risk||"UNKNOWN",
-   "Open-Meteo GloFAS discharge "+discharge.toFixed(1)+" m³/s at the active grid point; 1h/24h/72h/7d rainfall "+[weather&&weather.precipitation_1h_mm,weather&&weather.precipitation_24h_mm,weather&&weather.precipitation_72h_mm,weather&&weather.precipitation_7d_mm].map(function(value){return value==null?"not reported":Number(value).toFixed(1);}).join(" / ")+" mm. Runoff screening index "+(runoff==null?"not computed":runoff+"/100")+" (not a hydrological forecast).",
+   "Open-Meteo GloFAS discharge "+discharge.toFixed(1)+" m³/s at the active grid point; 1h/24h/72h/7d rainfall "+[weather&&weather.precipitation_1h_mm,weather&&weather.precipitation_24h_mm,weather&&weather.precipitation_72h_mm,weather&&weather.precipitation_7d_mm].map(function(value){return value==null?"No sample":Number(value).toFixed(1);}).join(" / ")+" mm. Runoff screening index "+(runoff==null?"No sample":runoff+"/100")+" (not a hydrological forecast).",
    "Use official river-gauge and disaster-management alerts; this model feed is contextual.","Active GloFAS grid point",[sample.source,"Open-Meteo Forecast"]),Math.min(100,discharge/30));
  };
  LocalDataGroundedEngine.prototype.traffic=function(){
-  var manager=window.__srTrafficManager,evidence=trafficEvidence(manager),values=[],corridors=window.__srLiveSnapshot&&window.__srLiveSnapshot.corridors||[];
-  if(manager&&manager.cache)manager.cache.forEach(function(entry){if(!entry.data||!entry.data.decoded||!Array.isArray(entry.data.features)||!entry.timestamp||Date.now()-entry.timestamp>(manager.options&&manager.options.tileTtlMs||120000))return;entry.data.features.forEach(function(feature){var value=Number(feature.properties&&feature.properties.relative_speed);if(Number.isFinite(value)&&value>=0&&value<=1)values.push(value);});});
+  var snapshot=liveHazardSnapshot(),manager=window.__srTrafficManager,evidence=trafficEvidence(manager),values=[],corridors=snapshot&&snapshot.corridors||[];
+  if(manager&&manager.cache)manager.cache.forEach(function(entry){
+   if(values.length>=3000||!entry.data||!entry.data.decoded||!Array.isArray(entry.data.features)||!entry.timestamp||Date.now()-entry.timestamp>(manager.options&&manager.options.tileTtlMs||120000))return;
+   for(var index=0;index<entry.data.features.length&&values.length<3000;index++){
+    var value=Number(entry.data.features[index].properties&&entry.data.features[index].properties.relative_speed);
+    if(Number.isFinite(value)&&value>=0&&value<=1)values.push(value);
+   }
+  });
   var observedSpeeds=corridors.map(function(c){return c.traffic&&c.traffic.currentSpeed!=null&&Number.isFinite(Number(c.traffic.currentSpeed))?Number(c.traffic.currentSpeed):null;}).filter(function(value){return value!==null;});
   var observedRatios=corridors.map(function(c){var t=c.traffic||{},speed=Number(t.currentSpeed),free=Number(t.freeFlowSpeed);return t.currentSpeed!=null&&t.freeFlowSpeed!=null&&Number.isFinite(speed)&&Number.isFinite(free)&&free>0?speed/free:null;}).filter(function(value){return value!==null;});
   var ratios=values.length?values:observedRatios;
   if(!ratios.length){
    var route=window.__srActiveRoute,baseline=route&&Number(route.totalDistanceM)>0&&Number(route.totalTimeMs)>0?Number(route.totalDistanceM)/(Number(route.totalTimeMs)/3600000):null;
-   return this.result(baseline?"MODELLED":"NO SAMPLE","UNKNOWN",0,"UNKNOWN",baseline?"No TomTom sample is available. GraphHopper planned speed "+baseline.toFixed(1)+" km/h is a route baseline, not live traffic; congestion ratio and delay are not reported.":"No decoded TomTom or corridor speed sample is available for this view.","Treat the route baseline as planned travel time, not live congestion.","Current route or viewport",baseline?["GraphHopper route baseline · modelled, not observed"]:["TomTom Traffic Flow"]);
+   return this.result(baseline?"MODELLED":"NO SAMPLE","UNKNOWN",0,"UNKNOWN",baseline?"No TomTom sample is available. GraphHopper planned speed "+baseline.toFixed(1)+" km/h is a route baseline, not live traffic; no live congestion ratio or delay sample is available.":"No decoded TomTom or corridor speed sample is available for this view.","Treat the route baseline as planned travel time, not live congestion.","Current route or viewport",baseline?["GraphHopper route baseline · modelled, not observed"]:["TomTom Traffic Flow"]);
   }
   var averageRatio=ratios.reduce(function(total,value){return total+value;},0)/ratios.length;
   var averageSpeed=observedSpeeds.length?observedSpeeds.reduce(function(total,value){return total+value;},0)/observedSpeeds.length:null;
   var delaySeconds=corridors.map(function(c){var delay=Number(c.traffic&&c.traffic.delay_seconds);return Number.isFinite(delay)?delay:null;}).filter(function(value){return value!==null;});
   var averageDelay=delaySeconds.length?delaySeconds.reduce(function(total,value){return total+value;},0)/delaySeconds.length:null;
-  return resultWithScore(this.result(evidence.samples?"LIVE":window.__srLiveSnapshotBadge==="LIVE ONLINE"?"LIVE":"CACHED",averageRatio<0.45?"HEAVY":averageRatio<0.75?"MODERATE":"SMOOTH",0,averageRatio<0.45?"HIGH":averageRatio<0.75?"MODERATE":"LOW",
+  return resultWithScore(this.result(evidence.samples?"LIVE":liveState().status==="LIVE ONLINE"?"LIVE":"CACHED",averageRatio<0.45?"HEAVY":averageRatio<0.75?"MODERATE":"SMOOTH",0,averageRatio<0.45?"HIGH":averageRatio<0.75?"MODERATE":"LOW",
    "Congestion ratio "+averageRatio.toFixed(2)+" · average observed speed "+(averageSpeed===null?"not supplied":averageSpeed.toFixed(1)+" km/h")+" · mean reported delay "+(averageDelay===null?"not supplied":(averageDelay/60).toFixed(1)+" min")+" · "+ratios.length+" sample(s). Corridor samples are not complete road coverage.",
    "Unobserved roads are not classified; check current road restrictions before travel.","TomTom decoded tiles and corridor observations",["TomTom Traffic Flow"]),Math.max(0,Math.min(100,(1-averageRatio)*100)));
  };
@@ -1432,10 +1461,10 @@ html.sr-welcome-dismissed #srWelcome,#srWelcome[hidden]{display:none}
   if(Number.isFinite(soil))parts.push(Math.max(0,Math.min(20,(soil-0.2)/0.25*20)));
   var proximity=nearest?nearest.distanceKm<=5?15:nearest.distanceKm<=15?8:0:null;
   if(proximity!==null)parts.push(proximity);
-  if(!parts.length)return this.result("NO SAMPLE","UNKNOWN",0,"UNKNOWN","Rainfall and soil-moisture windows were not reported; terrain slope is not supplied by connected feeds.","Check official landslide and road-closure advisories.","Active map/route position",[sample.source]);
+  if(!parts.length)return this.result("NO SAMPLE","UNKNOWN",0,"UNKNOWN","No rainfall or soil-moisture sample is available; terrain slope is not supplied by connected feeds.","Check official landslide and road-closure advisories.","Active map/route position",[sample.source]);
   var score=Math.round(parts.reduce(function(total,value){return total+value;},0)),tier=score>=75?"CRITICAL":score>=55?"HIGH":score>=30?"MODERATE":"LOW";
   return resultWithScore(this.result("SCREENING · "+sample.status,tier,0,tier,
-   "Himalayan rainfall/proximity screening index "+score+"/100 · 24h rain "+(Number.isFinite(rain24)?rain24.toFixed(1)+" mm":"not reported")+" · 72h rain "+(Number.isFinite(rain72)?rain72.toFixed(1)+" mm":"not reported")+" · soil moisture "+(Number.isFinite(soil)?soil.toFixed(3)+" m³/m³":"not reported")+" · nearest monitored corridor "+(nearest?nearest.record.name+" "+nearest.distanceKm.toFixed(1)+" km":"not sampled")+". Terrain slope is not in this feed; this is not a landslide prediction.",
+   "Himalayan rainfall/proximity screening index "+score+"/100 · 24h rain "+(Number.isFinite(rain24)?rain24.toFixed(1)+" mm":"No sample")+" · 72h rain "+(Number.isFinite(rain72)?rain72.toFixed(1)+" mm":"No sample")+" · soil moisture "+(Number.isFinite(soil)?soil.toFixed(3)+" m³/m³":"No sample")+" · nearest monitored corridor "+(nearest?nearest.record.name+" "+nearest.distanceKm.toFixed(1)+" km":"No corridor sample")+". Terrain slope is not in this feed; this is not a landslide prediction.",
    "Verify official road and landslide notices; do not treat this screening index as a warning.","Active point and monitored corridor references",[sample.source,"Sikkim Geospatial Registry"]),score);
  };
  LocalDataGroundedEngine.prototype.dam=function(){
@@ -1450,10 +1479,10 @@ html.sr-welcome-dismissed #srWelcome,#srWelcome[hidden]{display:none}
    "Follow the dam operator and official emergency authorities; do not infer reservoir safety from map or rainfall data.",point?"Active map/route position":"Map center",[flood.source,"Sikkim Geospatial Registry · static coordinates"]);
  };
  LocalDataGroundedEngine.prototype.tourism=function(){
-  var snapshot=window.__srLiveSnapshot||{},circuits=Array.isArray(snapshot.tourism)?snapshot.tourism:[],places=window.__srTourismPlaces||[];
+  var snapshot=liveHazardSnapshot()||{},circuits=Array.isArray(snapshot.tourism)?snapshot.tourism:[],places=window.__srTourismPlaces||[];
   var rows=circuits.map(function(item){return item.circuit+": "+item.destinations.join(", ")+" — "+item.status+". "+item.reason;});
   if(places.length)rows.push(places.length+" current-view OpenStreetMap tourism result(s).");
-  return this.result(circuits.length||places.length?(window.__srLiveSnapshotBadge==="LIVE ONLINE"?"LIVE":"CACHED"):"NO SAMPLE","CONTEXTUAL",0,"UNKNOWN",
+  return this.result(circuits.length||places.length?(liveState().status==="LIVE ONLINE"?"LIVE":"CACHED"):"NO SAMPLE","CONTEXTUAL",0,"UNKNOWN",
    rows.length?rows.join(" "):"No tourism advisory snapshot has been received; static landmark conditions are not inferred.",
    "Check permit and official road advisories before travel.",telemetryPoint()?"Current viewport / route context":"Map center",[circuits.length?"Open-Meteo / TomTom corridor screening":"Tourism advisories not received",places.length?"OpenStreetMap current-view places":"Sikkim tourism reference circuits"]);
  };
@@ -1487,6 +1516,31 @@ html.sr-welcome-dismissed #srWelcome,#srWelcome[hidden]{display:none}
  LocalDataGroundedEngine.prototype.live=function(){return {traffic:this.traffic(),weather:this.weather(),air:this.air(),flood:this.flood(),dam:this.dam(),hazards:this.hazards(),landslide:this.landslide(),gps:this.gps(),route:this.route()};};
  var SafeRouteAIEngine=new LocalDataGroundedEngine();
  window.SafeRouteAIEngine=SafeRouteAIEngine;
+ var metricNames=["air","weather","flood","traffic","hazards","dam","landslide","tourism","emergency","gps","route","map","safety"],metricCache={},metricWarmTimer=null;
+ var metricCalculators={};
+ metricNames.forEach(function(name){
+  metricCalculators[name]=SafeRouteAIEngine[name];
+  SafeRouteAIEngine[name]=function(){
+   if(!Object.prototype.hasOwnProperty.call(metricCache,name))metricCache[name]=metricCalculators[name].apply(SafeRouteAIEngine,arguments);
+   return metricCache[name];
+  };
+ });
+ function warmLiveMetrics(){
+  if(metricNames.every(function(name){return Object.prototype.hasOwnProperty.call(metricCache,name);}))return;
+  metricCache={};
+  metricNames.forEach(function(name){SafeRouteAIEngine[name]();});
+ }
+ function scheduleLiveMetricWarm(){
+  metricCache={};
+  clearTimeout(metricWarmTimer);
+  metricWarmTimer=setTimeout(warmLiveMetrics,0);
+ }
+ window.__srWarmLiveMetrics=warmLiveMetrics;
+ ["saferoute:telemetry-updated","saferoute:live-state-updated","saferoute:location-updated","saferoute:route-updated"].forEach(function(eventName){
+  document.addEventListener(eventName,scheduleLiveMetricWarm);
+ });
+ window.addEventListener("saferoute:context",scheduleLiveMetricWarm);
+ setTimeout(warmLiveMetrics,0);
  var trafficModelState={status:"NO MODEL INPUT",result:null,error:"No external clustering input yet; local deterministic rules remain active.",inferenceTimestamp:null,attemptedAt:0};
  var trafficModelRequest=null;
  function trafficModelInput(){
@@ -1507,7 +1561,7 @@ html.sr-welcome-dismissed #srWelcome,#srWelcome[hidden]{display:none}
    if(!result||result.model!=="SafeRouteTrafficKMeans"||result.status!=="INFERRED"||!result.congestionClass||!result.inferenceTimestamp||typeof result.trainingStatus!=="string"||typeof result.provenanceVerified!=="boolean"||typeof result.modelType!=="string"){throw new Error("Traffic rules response failed validation: missing model provenance or training metadata.");}
     trafficModelState={status:"INFERRED",result:result,error:"",inferenceTimestamp:result.inferenceTimestamp,attemptedAt:Date.now()}; return result;
    })
-   .catch(function(error){trafficModelState={status:"ERROR",result:null,error:error.name==="AbortError"?"Traffic rules request timed out.":error.message||"Traffic rules unavailable.",inferenceTimestamp:null,attemptedAt:Date.now()}; return null;})
+   .catch(function(error){trafficModelState={status:"ERROR",result:null,error:error.name==="AbortError"?"Traffic rules request timed out.":error.message||"Traffic rules service did not respond.",inferenceTimestamp:null,attemptedAt:Date.now()}; return null;})
    .finally(function(){clearTimeout(timer); trafficModelRequest=null;});
   return trafficModelRequest;
  }
@@ -1548,7 +1602,7 @@ html.sr-welcome-dismissed #srWelcome,#srWelcome[hidden]{display:none}
   modelRequests[key]=fetch(window.__srBackendOrigin+"/api/ai/analyze",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(input),signal:controller.signal})
    .then(function(response){return response.json().then(function(body){if(!response.ok)throw new Error(body.message||"Rules analysis request failed.");return body;});})
    .then(function(body){var result=body&&body.result;if(!result||result.task!==key||result.status!=="INFERRED"||!result.modelVersion||!result.explanation)throw new Error("Rules analysis response failed validation.");modelStates[key]={status:"INFERRED",result:result,error:""};return result;})
-   .catch(function(error){modelStates[key]={status:"ERROR",result:null,error:error.name==="AbortError"?"Rules analysis request timed out.":error.message||"Rules analysis unavailable."};return null;})
+   .catch(function(error){modelStates[key]={status:"ERROR",result:null,error:error.name==="AbortError"?"Rules analysis request timed out.":error.message||"Rules analysis service did not respond."};return null;})
    .finally(function(){clearTimeout(timer);modelRequests[key]=null;});
   return modelRequests[key];
  }
@@ -1563,7 +1617,7 @@ html.sr-welcome-dismissed #srWelcome,#srWelcome[hidden]{display:none}
   hazards:{title:"AI HAZARDS", rows:[["Status","REFERENCE AND LIVE FEED STATUS"],["Active Hazards","Current-incident feed only when received"],["Road Risk","Computed from route overlap and observed feeds"],["Flood/Landslide Risk","Contextual screening; not an incident report"],["Affected Area","Current map or route context"],["Recommendation","Verify current official advisories"]]},
   landslide:{title:"AI LANDSLIDE", rows:[["Status","RAINFALL / PROXIMITY SCREENING"],["Live incidents","No incident claim without an incident feed"],["Prediction","Slope data is not connected"],["Recommendation","Check official disaster-management alerts"]]},
   flood:{title:"AI FLOOD", rows:[["Flood source","Open-Meteo GloFAS when sampled"],["Source status","Source-labelled"],["Freshness","Timestamped provider sample"],["Analysis","Discharge and rainfall screening; not an official warning"],["Recommendation","Use official river and disaster-management alerts"]]},
-  dam:{title:"AI DAM / WATER SAFETY", rows:[["Dam source","Static Sikkim reference registry"],["Source status","Reference only"],["Freshness","No operator telemetry is provided"],["Water level / release","Not reported by connected feeds"],["Analysis","Rainfall and nearby river flow are not dam inflow"],["Recommendation","Follow the dam operator and official authorities"]]},
+  dam:{title:"AI DAM / WATER SAFETY", rows:[["Dam source","Static Sikkim reference registry"],["Source status","Reference only"],["Freshness","No operator telemetry sample is connected"],["Water level / release","No operator telemetry sample"],["Analysis","Rainfall and nearby river flow are not dam inflow"],["Recommendation","Follow the dam operator and official authorities"]]},
   safety:{title:"AI SAFETY", rows:[["Safety Status","Deterministic rules active"],["Current Risk",function(){return aiValue("#safetyChipText","Rainfall telemetry not yet received")}],["Nearby Risk Factors","Computed from available, source-labelled data"],["Analysis","Unknown inputs are not treated as safe"],["Recommendation","Use current official safety guidance"]]},
   tourism:{title:"AI TOURISM", rows:[["Status","Corridor advisory snapshot"],["Nearby Places","Current-view OSM results and static circuits"],["Conditions","Based on available weather/corridor observations"],["Restrictions","Permit advisories are not permit verification"],["Road Access","TomTom corridor samples when received"],["Recommendation","Verify permits and official road notices"]]},
   emergency:{title:"AI EMERGENCY", rows:[["Status","STATIC REFERENCE LOCATIONS"],["Nearest Help","Sorted by distance from current position"],["Road Access","Requires current route/traffic observations"],["Current Hazards","Source-labelled route screening"],["Emergency Numbers","Available in Emergency & Help"],["Recommended Action","Contact local emergency services directly"]]},
@@ -1575,12 +1629,12 @@ html.sr-welcome-dismissed #srWelcome,#srWelcome[hidden]{display:none}
   window.__srActiveAiModule=key;
   var analyses={map:SafeRouteAIEngine.map,route:SafeRouteAIEngine.route,traffic:SafeRouteAIEngine.traffic,weather:SafeRouteAIEngine.weather,air:SafeRouteAIEngine.air,hazards:SafeRouteAIEngine.hazards,landslide:SafeRouteAIEngine.landslide,flood:SafeRouteAIEngine.flood,dam:SafeRouteAIEngine.dam,safety:SafeRouteAIEngine.safety,tourism:SafeRouteAIEngine.tourism,emergency:SafeRouteAIEngine.emergency};
   if(key==="live"){
-   var live=SafeRouteAIEngine.live(),snapshot=window.__srLiveSnapshot,sourceBadge=window.__srLiveSnapshotBadge||"OFFLINE MODE (CACHED SNAPSHOT)",corridorRows=[],tourismRows=[];
-   if(snapshot&&Array.isArray(snapshot.corridors))snapshot.corridors.forEach(function(c){var t=c.traffic||{};corridorRows.push([c.name+" · "+c.road,(t.status||"NO SAMPLE")+" · current "+(t.currentSpeed==null?"not reported":t.currentSpeed+" km/h")+" / free-flow "+(t.freeFlowSpeed==null?"not reported":t.freeFlowSpeed+" km/h")+" · delay "+(t.delay_seconds==null?"not reported":Math.round(t.delay_seconds/60)+" min")]);});
+   var live=SafeRouteAIEngine.live(),snapshot=liveHazardSnapshot(),sourceBadge=liveState().status||"OFFLINE BASELINE",corridorRows=[],tourismRows=[];
+   if(snapshot&&Array.isArray(snapshot.corridors))snapshot.corridors.forEach(function(c){var t=c.traffic||{};corridorRows.push([c.name+" · "+c.road,(t.status||"NO SAMPLE")+" · current "+(t.currentSpeed==null?"No sample":t.currentSpeed+" km/h")+" / free-flow "+(t.freeFlowSpeed==null?"No sample":t.freeFlowSpeed+" km/h")+" · delay "+(t.delay_seconds==null?"No sample":Math.round(t.delay_seconds/60)+" min")]);});
    if(snapshot&&Array.isArray(snapshot.tourism))snapshot.tourism.forEach(function(v){tourismRows.push([v.destinations.join(" / "),v.status+" · "+v.reason]);});
    var liveRows=[["SOURCE",sourceBadge],["GPS",live.gps.status+" · "+live.gps.reason],["Traffic",live.traffic.status+" · "+live.traffic.reason],["Weather",live.weather.status+" · "+live.weather.reason],["Air quality",live.air.status+" · "+live.air.reason],["Flood",live.flood.status+" · "+live.flood.reason],["Dam",live.dam.status+" · "+live.dam.reason],["Hazards",live.hazards.status+" · "+live.hazards.reason],["Landslide",live.landslide.status+" · "+live.landslide.reason],["Route",live.route.status+" · "+live.route.reason]];
    corridorRows.forEach(function(row){liveRows.push(["Corridor · "+row[0],row[1]]);});
-   if(snapshot&&Array.isArray(snapshot.corridors))snapshot.corridors.forEach(function(c){var air=c.air_quality||{};liveRows.push([c.name+" Multi-Hazard","Flood "+(c.flood_risk||"NO SAMPLE")+" · "+(c.river_discharge_m3s==null?"no discharge sample":c.river_discharge_m3s.toFixed(1)+" m³/s")+" · Landslide "+(c.landslide_risk||"NO SAMPLE")+" · US AQI "+(air.us_aqi==null?"not reported":air.us_aqi)+" · EU AQI "+(air.european_aqi==null?"not reported":air.european_aqi)+" · PM2.5 "+(air.pm2_5==null?"not reported":air.pm2_5)+" · PM10 "+(air.pm10==null?"not reported":air.pm10)+" · O₃ "+(air.ozone==null?"not reported":air.ozone)+" · NO₂ "+(air.nitrogen_dioxide==null?"not reported":air.nitrogen_dioxide)+" · CO "+(air.carbon_monoxide==null?"not reported":air.carbon_monoxide)]);});
+   if(snapshot&&Array.isArray(snapshot.corridors))snapshot.corridors.forEach(function(c){var air=c.air_quality||{};liveRows.push([c.name+" Multi-Hazard","Flood "+(c.flood_risk||"NO SAMPLE")+" · "+(c.river_discharge_m3s==null?"No sample":c.river_discharge_m3s.toFixed(1)+" m³/s")+" · Landslide "+(c.landslide_risk||"NO SAMPLE")+" · US AQI "+(air.us_aqi==null?"No sample":air.us_aqi)+" · EU AQI "+(air.european_aqi==null?"No sample":air.european_aqi)+" · PM2.5 "+(air.pm2_5==null?"No sample":air.pm2_5)+" · PM10 "+(air.pm10==null?"No sample":air.pm10)+" · O₃ "+(air.ozone==null?"No sample":air.ozone)+" · NO₂ "+(air.nitrogen_dioxide==null?"No sample":air.nitrogen_dioxide)+" · CO "+(air.carbon_monoxide==null?"No sample":air.carbon_monoxide)]);});
    tourismRows.forEach(function(row){liveRows.push(["Tourism · "+row[0],row[1]]);});
    var backendState=window.__srLiveState||{},endpointStatus=backendState.endpointStatus||{};
    ["assessment","hazards","tourism","emergency"].forEach(function(source){
@@ -1591,8 +1645,8 @@ html.sr-welcome-dismissed #srWelcome,#srWelcome[hidden]{display:none}
    module={title:"LIVE MONITOR",rows:liveRows};
   }
   else if(key==="status"){
-   var liveStatus=SafeRouteAIEngine.live(),point=window.__srPointTelemetry,feeds=point&&point.sourceStatus||{};
-   module={title:"AI SYSTEM STATUS",rows:[["AI model","LOCAL DETERMINISTIC RULES"],["Rules engine","ACTIVE · data-grounded screening"],["Traffic rules",trafficModelState.status==="UNAVAILABLE"?"NO CURRENT MODEL INPUT":trafficModelState.status],["Rules version",trafficModelState.result?trafficModelState.result.modelVersion:"Local rule set"],["Last traffic analysis",trafficModelState.inferenceTimestamp||"No external inference requested"],["Traffic analysis time",trafficModelState.result?trafficModelState.result.inferenceTimeMs+" ms":"Local rules run on panel open"],["Fallback","Missing evidence remains unknown; no safety assumption is substituted"],["Map rules",SafeRouteAIEngine.map().status],["Route rules",SafeRouteAIEngine.route().status],["Traffic observations",liveStatus.traffic.status],["Weather readings",liveStatus.weather.status+" · "+(feeds.weather||"not received")],["Air-quality readings",liveStatus.air.status+" · "+(feeds.air_quality||"not received")],["Flood readings",liveStatus.flood.status+" · "+(feeds.flood||"not received")],["Hazard references",liveStatus.hazards.status],["Landslide screening",liveStatus.landslide.status],["Safety rules",SafeRouteAIEngine.safety().status],["Tourism data",SafeRouteAIEngine.tourism().status],["Emergency references",SafeRouteAIEngine.emergency().status],["Last check",SafeRouteAIEngine.now()]]};
+   var liveStatus=SafeRouteAIEngine.live(),point=pointTelemetrySnapshot(),feeds=point&&point.sourceStatus||{};
+   module={title:"AI SYSTEM STATUS",rows:[["AI model","LOCAL DETERMINISTIC RULES"],["Rules engine","ACTIVE · data-grounded screening"],["Traffic rules",trafficModelState.status],["Rules version",trafficModelState.result?trafficModelState.result.modelVersion:"Local rule set"],["Last traffic analysis",trafficModelState.inferenceTimestamp||"No external inference requested"],["Traffic analysis time",trafficModelState.result?trafficModelState.result.inferenceTimeMs+" ms":"Local rules run on panel open"],["Fallback","Missing evidence remains unknown; no safety assumption is substituted"],["Map rules",SafeRouteAIEngine.map().status],["Route rules",SafeRouteAIEngine.route().status],["Traffic observations",liveStatus.traffic.status],["Weather readings",liveStatus.weather.status+" · "+(feeds.weather||"No sample")],["Air-quality readings",liveStatus.air.status+" · "+(feeds.air_quality||"No sample")],["Flood readings",liveStatus.flood.status+" · "+(feeds.flood||"No sample")],["Hazard references",liveStatus.hazards.status],["Landslide screening",liveStatus.landslide.status],["Safety rules",SafeRouteAIEngine.safety().status],["Tourism data",SafeRouteAIEngine.tourism().status],["Emergency references",SafeRouteAIEngine.emergency().status],["Last check",SafeRouteAIEngine.now()]]};
   }
   else if(analyses[key]){ var analysis=analyses[key].call(SafeRouteAIEngine); module={title:module.title,rows:[["Status",analysis.status],["Severity",analysis.severity],["Risk",analysis.risk],["Analysis",analysis.reason],["Affected Area",analysis.affectedArea],["Recommendation",analysis.recommendation],["Last Update",analysis.timestamp],["Sources",analysis.sources.join("; ")||"No source reported by provider"]]}; }
   $("aiPanel").style.display="none"; $("aiModulePanel").style.display="block"; $("aiModuleTitle").textContent=module.title;
@@ -1607,7 +1661,7 @@ html.sr-welcome-dismissed #srWelcome,#srWelcome[hidden]{display:none}
    var noteModel=document.createElement("div"); noteModel.className="sr-note"; noteModel.textContent=model.status==="INFERRED"?"Model: "+model.result.model+" v"+model.result.modelVersion+" | Type: "+model.result.modelType+" | Training: "+model.result.trainingStatus+" | Provenance verified: "+model.result.provenanceVerified+" | Inference: "+model.result.inferenceTimeMs+" ms. "+(model.result.explanation||""):model.error; modelSection.appendChild(noteModel); content.appendChild(modelSection);
   }
   if(["map","route","weather","air","hazards","landslide","flood","dam","safety","tourism","emergency"].indexOf(key)>=0){
-   var ruleAnalysis=analyses[key].call(SafeRouteAIEngine),ruleScore=ruleAnalysis.riskScore,point=window.__srPointTelemetry,sourceStates=point&&point.sourceStatus||{},trafficState=aiTrafficState().state;
+   var ruleAnalysis=analyses[key].call(SafeRouteAIEngine),ruleScore=ruleAnalysis.riskScore,point=pointTelemetrySnapshot(),sourceStates=point&&point.sourceStatus||{},trafficState=aiTrafficState().state;
    var section=document.createElement("div"); section.className="sr-ai-assessment";
    var heading=document.createElement("div"); heading.className="sr-ai-assessment-title"; heading.textContent="DETERMINISTIC RULES · "+module.title; section.appendChild(heading);
    var ruleRows=[["RULES STATUS","ACTIVE · local deterministic screening"],["RULES RESULT",ruleScore==null?"INDETERMINATE · no numeric samples":ruleScore+"/100 · "+ruleAnalysis.risk],["FINAL ASSESSMENT",ruleAnalysis.status],["SOURCES","Open-Meteo Weather: "+(sourceStates.weather||"not received")+"; Open-Meteo Air Quality: "+(sourceStates.air_quality||"not received")+"; Open-Meteo Flood Discharge: "+(sourceStates.flood||"not received")+"; TomTom Traffic: "+trafficState+"; USGS Seismic: not connected; NASA FIRMS: not configured; Sikkim Geospatial Registry: reference data"]];
@@ -1615,26 +1669,28 @@ html.sr-welcome-dismissed #srWelcome,#srWelcome[hidden]{display:none}
    var detail=document.createElement("div");detail.className="sr-note";detail.textContent="Deterministic analysis: "+ruleAnalysis.reason+" Recommendation: "+ruleAnalysis.recommendation;section.appendChild(detail);content.appendChild(section);
   }
  }
- var aiModuleRenderVersion=0;
  function openAiModule(key){
   if(!aiModules[key])return;
-  var version=++aiModuleRenderVersion,content=$("aiModuleContent");
+  warmLiveMetrics();
   window.__srActiveAiModule=key;
   $("aiPanel").style.display="none";
   $("aiModulePanel").style.display="block";
   $("aiModuleTitle").textContent=aiModules[key].title;
-  content.textContent="";
-  var note=document.createElement("div");
-  note.className="sr-note";
-  note.textContent="Local snapshot active · displaying cached/received evidence; unavailable feeds are not treated as safe.";
-  content.appendChild(note);
-  setTimeout(function(){if(version===aiModuleRenderVersion&&$("aiModulePanel").style.display==="block")renderAiModuleNow(key,true);},0);
+  renderAiModuleNow(key,true);
  }
  function analysisStatusFor(key){var fn=SafeRouteAIEngine[key];return fn?fn.call(SafeRouteAIEngine).status:"NO RULES FUNCTION";}
- document.addEventListener("saferoute:telemetry-updated",function(){
-  if($("aiModulePanel").style.display==="block"&&window.__srActiveAiModule&&window.__srActiveAiModule!=="live"&&window.__srActiveAiModule!=="status"){
-   openAiModule(window.__srActiveAiModule,true);
-  }
+ var visibleAiRefreshTimer=null;
+ function scheduleVisibleAiRefresh(){
+  var activeKey=window.__srActiveAiModule,moduleVisible=$("aiModulePanel").style.display==="block",centerVisible=$("aiPanel").style.display==="block";
+  if((!moduleVisible&&!centerVisible)||visibleAiRefreshTimer)return;
+  visibleAiRefreshTimer=setTimeout(function(){
+   visibleAiRefreshTimer=null;
+   if(moduleVisible&&$("aiModulePanel").style.display==="block"&&window.__srActiveAiModule===activeKey)renderAiModuleNow(activeKey,true);
+   if(centerVisible&&$("aiPanel").style.display==="block")renderAiCenterSummary();
+  },0);
+ }
+ ["saferoute:telemetry-updated","saferoute:live-state-updated","saferoute:location-updated","saferoute:route-updated"].forEach(function(eventName){
+  document.addEventListener(eventName,scheduleVisibleAiRefresh);
  });
  document.querySelectorAll("[data-ai-module]").forEach(function(button){ window.__srBindFastTap(button,function(){openAiModule(button.dataset.aiModule);}); });
  // AI integration boundary: context from real app state only; no service is connected.
@@ -2546,10 +2602,25 @@ viewer.camera.moveEnd.addEventListener(function(){
  maybeFetchOsmPlaces();
 });
 function followCameraTo(lat, lon){
+ let heading=viewer.camera.heading;
+ const routeCoordinates=activeRoute&&activeRoute.coordinates;
+ if(window.__srNavigationActive&&Array.isArray(routeCoordinates)&&routeCoordinates.length>1){
+  const nearest=nearestPointOnRoute(lat,lon,routeCoordinates);
+  const index=nearest?nearest.index:0;
+  const from=routeCoordinates[Math.min(index,routeCoordinates.length-2)];
+  const to=routeCoordinates[Math.min(index+1,routeCoordinates.length-1)];
+  const lat1=from[1]*Math.PI/180,lat2=to[1]*Math.PI/180,deltaLon=(to[0]-from[0])*Math.PI/180;
+  heading=Math.atan2(Math.sin(deltaLon)*Math.cos(lat2),Math.cos(lat1)*Math.sin(lat2)-Math.sin(lat1)*Math.cos(lat2)*Math.cos(deltaLon));
+ }
+ const currentHeight=viewer.camera.positionCartographic&&viewer.camera.positionCartographic.height;
+ const height=window.__srNavigationActive&&viewer.scene.mode===Cesium.SceneMode.SCENE3D
+  ?Math.min(8000,Math.max(900,Number.isFinite(currentHeight)?currentHeight:2200)):15000;
  isProgrammaticCameraMove = true;
  viewer.camera.flyTo({
- destination: Cesium.Cartesian3.fromDegrees(lon, lat, 15000),
- duration: 1.5,
+ destination: Cesium.Cartesian3.fromDegrees(lon,lat,height),
+ orientation:window.__srNavigationActive&&viewer.scene.mode===Cesium.SceneMode.SCENE3D
+  ?{heading:heading,pitch:Cesium.Math.toRadians(-38),roll:0}:undefined,
+ duration:window.__srNavigationActive?0.7:1.5,
  complete: function(){ isProgrammaticCameraMove = false; },
  cancel: function(){ isProgrammaticCameraMove = false; }
  });
@@ -2573,6 +2644,7 @@ window.__srNavigationStateReady = false;
 window.updateUserMarker = function(lat, lon, speedMps){
  console.log("Live GPS update -> LAT:", lat, "LON:", lon);
  addOrUpdateUserMarker(lat, lon);
+ document.dispatchEvent(new CustomEvent("saferoute:location-updated"));
  if (!window.__srNavigationStateReady) { return; }
  if (activeRoute) {
  trackNavigationProgress(lat, lon, speedMps);
@@ -2756,7 +2828,7 @@ function trackNavigationProgress(lat, lon, speedMps){
  });
  const banner=document.getElementById("srNavigationBanner");
  if(banner&&window.__srNavigationActive){
-  const speed=Number.isFinite(Number(speedMps))&&Number(speedMps)>=0?(Number(speedMps)*3.6).toFixed(1)+" km/h":"speed not reported";
+  const speed=Number.isFinite(Number(speedMps))&&Number(speedMps)>=0?(Number(speedMps)*3.6).toFixed(1)+" km/h":"speed not received";
   const caution=activeRoute.risks&&activeRoute.risks.length?"\nCAUTION · "+activeRoute.risks[0].reason:"";
   const approximate=String(activeRoute.source||"").indexOf("Offline estimate")===0;
   banner.setAttribute("aria-hidden","false");
@@ -3645,6 +3717,7 @@ function clearRoute(){
  routeAlternatives = [];
  activeRoute = null;
  window.__srActiveRoute = null;
+ document.dispatchEvent(new CustomEvent("saferoute:route-updated"));
  window.__srSelectedDestination = null;
  window.__srNavigationActive = false;
  window.__srPreview = false;
@@ -3793,6 +3866,7 @@ function renderCalculatedRoute(endLat,endLon,requestId){
  if(requestId!==routeRequestId)return;
  selectedAlternativeIndex=0;
  selectAlternative(0,endLat,endLon);
+ document.dispatchEvent(new CustomEvent("saferoute:route-updated"));
  announceRouteSummary(true);
 }
 function getRouteOrigin(){
@@ -3941,7 +4015,7 @@ function renderRoutePanel(){
  "<div class='sr-ai-metric'><b>" + aiRoute.risk + "</b><span>Risk</span></div>" +
  "<div class='sr-ai-metric'><b>" + (window.SafeRouteAIEngine.traffic().severity || "UNKNOWN") + "</b><span>Traffic</span></div>" +
  "<div class='sr-ai-metric'><b>" + (window.SafeRouteAIEngine.weather().risk || "UNKNOWN") + "</b><span>Weather</span></div>" +
- "<div class='sr-ai-metric'><b>" + (window.SafeRouteAIEngine.hazards().status === "STALE" ? "STALE" : window.SafeRouteAIEngine.hazards().risk) + "</b><span>Hazards</span></div>" +
+ "<div class='sr-ai-metric'><b>" + window.SafeRouteAIEngine.hazards().risk + "</b><span>Hazards</span></div>" +
  "<div class='sr-ai-metric'><b>" + (window.__srActiveRoute ? window.__srFormatDistance(window.__srActiveRoute.totalDistanceM, 1) : "N/A") + "</b><span>Route distance</span></div>" +
  "<div class='sr-ai-metric'><b class='sr-data-badge sr-data-" + aiRoute.status.toLowerCase() + "'>" + aiRoute.status + "</b><span>Data state</span></div>" +
  "</div></div>";
@@ -4011,16 +4085,46 @@ window.__toggleVoice = function(){
  }
  if(activeRoute)renderRoutePanel();
 };
+function simplifyWgs84Route(coordinates){
+ const normalized=[];
+ coordinates.forEach(function(coordinate){
+ if(!Array.isArray(coordinate))return;
+ const lon=Number(coordinate[0]),lat=Number(coordinate[1]);
+ if(!Number.isFinite(lon)||lon < -180||lon > 180||!Number.isFinite(lat)||lat < -90||lat > 90)return;
+ const previous=normalized[normalized.length-1];
+ if(previous&&Math.abs(previous[0]-lon)<1e-10&&Math.abs(previous[1]-lat)<1e-10)return;
+ normalized.push([lon,lat]);
+ });
+ if(normalized.length<3)return normalized;
+ const meanLatitude=normalized.reduce(function(sum,coordinate){return sum+coordinate[1];},0)/normalized.length*Math.PI/180;
+ const scaleX=111320*Math.cos(meanLatitude),scaleY=110540;
+ const projected=normalized.map(function(coordinate){return {x:coordinate[0]*scaleX,y:coordinate[1]*scaleY};});
+ const keep=new Uint8Array(normalized.length);keep[0]=1;keep[normalized.length-1]=1;
+ const pending=[[0,normalized.length-1]],toleranceSquared=0.75*0.75;
+ while(pending.length){
+ const range=pending.pop(),start=projected[range[0]],end=projected[range[1]];
+ const dx=end.x-start.x,dy=end.y-start.y,lengthSquared=dx*dx+dy*dy;
+ let farthest=-1,maxDistanceSquared=toleranceSquared;
+ for(let index=range[0]+1;index<range[1];index++){
+  const point=projected[index],ratio=lengthSquared===0?0:Math.max(0,Math.min(1,((point.x-start.x)*dx+(point.y-start.y)*dy)/lengthSquared));
+  const offsetX=point.x-(start.x+ratio*dx),offsetY=point.y-(start.y+ratio*dy),distanceSquared=offsetX*offsetX+offsetY*offsetY;
+  if(distanceSquared>maxDistanceSquared){maxDistanceSquared=distanceSquared;farthest=index;}
+ }
+ if(farthest>=0){keep[farthest]=1;pending.push([range[0],farthest],[farthest,range[1]]);}
+ }
+ return normalized.filter(function(_coordinate,index){return keep[index]===1;});
+}
 function drawRoute(coordinates){
  if (!Array.isArray(coordinates)||coordinates.length<2) {
  console.error("Route geometry must contain at least two WGS84 coordinates.");
  return;
  }
- const wgs84=coordinates.map(function(coord){return Array.isArray(coord)?[Number(coord[0]),Number(coord[1])]:[NaN,NaN];});
- if(wgs84.some(function(coord){return !Number.isFinite(coord[0])||coord[0]<-180||coord[0]>180||!Number.isFinite(coord[1])||coord[1]<-90||coord[1]>90;})){
+ if(coordinates.some(function(coord){return !Array.isArray(coord)||!Number.isFinite(Number(coord[0]))||Number(coord[0]) < -180||Number(coord[0]) > 180||!Number.isFinite(Number(coord[1]))||Number(coord[1]) < -90||Number(coord[1]) > 90;})){
  console.error("Route geometry contains invalid [longitude, latitude] coordinates.");
  return;
  }
+ const wgs84=simplifyWgs84Route(coordinates);
+ if(wgs84.length<2){console.error("Route geometry has fewer than two distinct WGS84 positions.");return;}
  if (window.__sr2dSetRoute) { window.__sr2dSetRoute(wgs84); }
  if (routeEntity) {
  viewer.entities.remove(routeEntity);
@@ -4777,7 +4881,7 @@ document.getElementById("cesiumContainer").style.visibility="hidden";
 <script>
 (function(){
  "use strict";
- var HAZARD_KEY="sr_sikkim_live_snapshot";
+ var HAZARD_KEY="sr_sikkim_live_snapshot",HAZARD_CACHE_MAX_AGE_MS=5*60*1000;
  var corridors=[
   {district:"East",name:"Gangtok",lat:27.3389,lon:88.6065,road:"NH-10 Gangtok–Deorali"},
   {district:"South",name:"Namchi",lat:27.1665,lon:88.3639,road:"Jorethang–Namchi Road"},
@@ -4813,8 +4917,12 @@ document.getElementById("cesiumContainer").style.visibility="hidden";
    var raw=localStorage.getItem(HAZARD_KEY);
    if(!raw)return null;
    var value=JSON.parse(raw);
-   if(!value||!value.snapshot||!Array.isArray(value.snapshot.corridors))return null;
-   return value.snapshot;
+   var age=value&&Number(value.timestamp)?Date.now()-Number(value.timestamp):Infinity;
+   if(!value||!value.snapshot||!Array.isArray(value.snapshot.corridors)||age<0||age>HAZARD_CACHE_MAX_AGE_MS){
+    localStorage.removeItem(HAZARD_KEY);
+    return null;
+   }
+   return value;
   }catch(error){return null;}
  }
  function project(lat,lon){
@@ -4841,7 +4949,7 @@ document.getElementById("cesiumContainer").style.visibility="hidden";
    "Flood: "+(c.flood_risk||"NO SAMPLE")+(c.river_discharge_m3s!=null?" · "+c.river_discharge_m3s.toFixed(1)+" m³/s":"")+
    "<br>Landslide: "+(c.landslide_risk||"NO SAMPLE")+
    "<br>AQI: "+(air.us_aqi!=null?air.us_aqi:"--")+" · PM2.5 "+(air.pm2_5!=null?air.pm2_5:"--")+" · PM10 "+(air.pm10!=null?air.pm10:"--")+
-   "<br>Traffic: "+(traffic.status||"NO LIVE SAMPLE")+" · "+(traffic.currentSpeed!=null?traffic.currentSpeed+" km/h":"not reported")+" / "+(traffic.freeFlowSpeed!=null?traffic.freeFlowSpeed+" km/h":"not reported")+" · "+(traffic.delay_seconds!=null?Math.round(traffic.delay_seconds/60)+" min":"not reported");
+   "<br>Traffic: "+(traffic.status||"NO LIVE SAMPLE")+" · "+(traffic.currentSpeed!=null?traffic.currentSpeed+" km/h":"No sample")+" / "+(traffic.freeFlowSpeed!=null?traffic.freeFlowSpeed+" km/h":"No sample")+" · "+(traffic.delay_seconds!=null?Math.round(traffic.delay_seconds/60)+" min":"No sample");
   document.body.appendChild(popup);
  }
  function render2D(){
@@ -4917,11 +5025,14 @@ document.getElementById("cesiumContainer").style.visibility="hidden";
   }
   if(window.__srRequestCesiumRender)window.__srRequestCesiumRender();
  }
- function applySnapshot(next,mode){
+ function applySnapshot(next,mode,measuredAt){
   snapshot=next||fallback;
-  window.__srLiveSnapshot=snapshot;
-  window.__srLiveSnapshotBadge=mode;
-  window.__srLiveState=Object.assign({},window.__srLiveState||{},{snapshot:snapshot,status:mode,updatedAt:Date.now()});
+  var state=window.__srLiveState||{};
+  state.snapshot=snapshot;
+  state.status=mode;
+  state.updatedAt=Date.now();
+  state.snapshotUpdatedAt=Number.isFinite(Number(measuredAt))?Number(measuredAt):null;
+  window.__srLiveState=state;
   setBadge(mode);
   render2D();
   render3D();
@@ -4942,18 +5053,23 @@ document.getElementById("cesiumContainer").style.visibility="hidden";
    .then(function(response){if(!response.ok)throw new Error("Hazard API HTTP "+response.status);return response.json();})
    .then(function(data){
     if(!data||!Array.isArray(data.corridors))throw new Error("Invalid hazard snapshot");
+    if(data.cache&&data.cache.stale){
+     var cached=getCached();
+     applySnapshot(cached&&cached.snapshot||fallback,cached?"OFFLINE MODE (CACHED SNAPSHOT)":"OFFLINE BASELINE",cached&&cached.timestamp);
+     return;
+    }
     var envelope={snapshot:data,timestamp:Date.now()};
     try{localStorage.setItem(HAZARD_KEY,JSON.stringify(envelope));}catch(error){}
-    applySnapshot(data,"LIVE ONLINE");
+    applySnapshot(data,"LIVE ONLINE",envelope.timestamp);
    })
    .catch(function(error){
     var cached=getCached();
-    applySnapshot(cached||fallback,"OFFLINE MODE (CACHED SNAPSHOT)");
+    applySnapshot(cached&&cached.snapshot||fallback,cached?"OFFLINE MODE (CACHED SNAPSHOT)":"OFFLINE BASELINE",cached&&cached.timestamp);
    })
    .finally(function(){clearTimeout(timeout);});
  }
  var cached=getCached();
- applySnapshot(cached||fallback,cached?"OFFLINE MODE (CACHED SNAPSHOT)":"OFFLINE MODE (CACHED SNAPSHOT)");
+ applySnapshot(cached&&cached.snapshot||fallback,cached?"OFFLINE MODE (CACHED SNAPSHOT)":"OFFLINE BASELINE",cached&&cached.timestamp);
  var schedule=function(){
   if(window.requestIdleCallback)window.requestIdleCallback(fetchLive,{timeout:120});
   else setTimeout(fetchLive,120);
@@ -4980,42 +5096,43 @@ document.getElementById("cesiumContainer").style.visibility="hidden";
  }
 })();
 (function(){
- var CACHE_KEY="sr_sikkim_point_telemetry_v1",timer=null,lastCell="",lastSuccessAt=0,requestController=null;
- function metric(value,digits,unit){
-  var number=value===null||value===undefined||value===""?NaN:Number(value);
-  return Number.isFinite(number)?number.toFixed(digits)+(unit||""):"not reported";
+ var CACHE_KEY="sr_sikkim_point_telemetry_v1",CACHE_MAX_AGE_MS=5*60*1000,timer=null,lastCell="",lastSuccessAt=0,requestController=null;
+ function publishPointTelemetry(snapshot,measuredAt){
+  var state=window.__srGetLiveState&&window.__srGetLiveState()||{};
+  state.point=snapshot;
+  state.pointUpdatedAt=snapshot?(measuredAt||Date.now()):null;
+  state.weather=snapshot&&snapshot.weather||null;
+  state.air_quality=snapshot&&snapshot.air_quality||null;
+  state.flood=snapshot&&snapshot.flood||null;
+  window.__srLiveState=state;
  }
  function render(){
-  var snapshot=window.__srPointTelemetry||{},weather=snapshot.weather||{},air=snapshot.air_quality||{},activePoint=window.__srGetActiveTelemetryPoint&&window.__srGetActiveTelemetryPoint();
+  var snapshot=window.__srGetLiveState&&window.__srGetLiveState().point||{},activePoint=window.__srGetActiveTelemetryPoint&&window.__srGetActiveTelemetryPoint();
   var weatherNode=document.getElementById("srWeatherTelemetryText"),airNode=document.getElementById("srAirQualityTelemetryText");
   var floodNode=document.getElementById("srFloodTag"),landslideNode=document.getElementById("srLandslideTag");
-  var status=!snapshot.generatedAt?"NO SAMPLE":snapshot.cache&&snapshot.cache.stale?"CACHED · STALE":snapshot.cache&&snapshot.cache.hit?"CACHED":"LIVE";
   if(weatherNode){
    var weatherAssessment=window.SafeRouteAIEngine&&window.SafeRouteAIEngine.weather?window.SafeRouteAIEngine.weather():null;
-   weatherNode.textContent="Active "+(activePoint&&activePoint.source||"map")+" · "+status+" · "+
-    (weatherAssessment?weatherAssessment.reason:"Current weather sample has not been received.")+" · "+
-    metric(weather.temperature_2m,1," °C")+" · rain 1h "+metric(weather.precipitation_1h_mm,1," mm")+
-    " / 24h "+metric(weather.precipitation_24h_mm,1," mm")+" / 72h "+metric(weather.precipitation_72h_mm,1," mm")+
-    " / 7d "+metric(weather.precipitation_7d_mm,1," mm")+" · deep soil "+metric(weather.soil_moisture_27_to_81cm,3," m³/m³")+". Rainfall is contextual, not an official warning.";
+    weatherNode.textContent="Active "+(activePoint&&activePoint.source||"map")+" · "+(weatherAssessment?weatherAssessment.status:!snapshot.generatedAt?"NO SAMPLE":snapshot.cache&&snapshot.cache.hit?"CACHED":"LIVE")+" · "+
+    (weatherAssessment?weatherAssessment.reason:"Weather telemetry: No sample.")+" Rainfall is contextual, not an official warning.";
   }
   if(airNode){
    var quality=window.SafeRouteAIEngine&&window.SafeRouteAIEngine.air?window.SafeRouteAIEngine.air():null;
-   airNode.textContent=(quality?quality.status:"NO SAMPLE")+" · "+(quality?quality.reason:"No current pollutant sample has been received.")+" · US AQI "+metric(air.us_aqi,0)+
-    " · EU AQI "+metric(air.european_aqi,0)+" · PM2.5 "+metric(air.pm2_5,1," µg/m³")+
-    " · PM10 "+metric(air.pm10,1," µg/m³")+" · O₃ "+metric(air.ozone,1," µg/m³")+
-    " · NO₂ "+metric(air.nitrogen_dioxide,1," µg/m³")+" · CO "+metric(air.carbon_monoxide,1," µg/m³")+
-    " · "+(air.advisory_tier||"NO SAMPLE")+" · "+(air.visibility_impact||"Visibility is not measured by this feed.");
+    airNode.textContent=(quality?quality.status:"NO SAMPLE")+" · "+(quality?quality.reason:"Air-quality telemetry: No sample. Visibility is not measured by this feed.");
   }
-  if(floodNode&&window.SafeRouteAIEngine){var flood=SafeRouteAIEngine.flood();floodNode.textContent=flood.risk+" · "+(snapshot.flood&&snapshot.flood.river_discharge_m3s!=null?metric(snapshot.flood.river_discharge_m3s,1," m³/s"):flood.status);}
-  if(landslideNode&&window.SafeRouteAIEngine){var landslide=SafeRouteAIEngine.landslide();landslideNode.textContent=landslide.risk+(landslide.riskScore==null?" · index pending":" · index "+landslide.riskScore+"/100");}
+   if(floodNode&&window.SafeRouteAIEngine){var flood=SafeRouteAIEngine.flood();floodNode.textContent=flood.status+" · "+flood.risk+" · "+flood.reason;}
+  if(landslideNode&&window.SafeRouteAIEngine){var landslide=SafeRouteAIEngine.landslide();landslideNode.textContent=landslide.risk+" · "+(landslide.riskScore==null?"No index sample":landslide.riskScore+"/100")+" · "+landslide.reason;}
  }
  function readCache(){
   try{
    var value=JSON.parse(localStorage.getItem(CACHE_KEY)||"null");
-   if(value&&value.snapshot&&Date.now()-Number(value.savedAt)<7*24*60*60*1000){
-    window.__srPointTelemetry=Object.assign({},value.snapshot,{cache:{hit:true,stale:Date.now()-Number(value.savedAt)>5*60*1000}});
+   var age=value&&Number(value.savedAt)?Date.now()-Number(value.savedAt):Infinity;
+   if(value&&value.snapshot&&age>=0&&age<=CACHE_MAX_AGE_MS&&!(value.snapshot.cache&&value.snapshot.cache.stale)){
+    publishPointTelemetry(Object.assign({},value.snapshot,{cache:{hit:true,stale:false}}),Number(value.savedAt));
     lastCell=value.cell||"";
     lastSuccessAt=Number(value.savedAt)||0;
+   }else if(value){
+    localStorage.removeItem(CACHE_KEY);
+    publishPointTelemetry(null);
    }
   }catch(error){console.warn("Point telemetry cache could not be read:",error.name);}
  }
@@ -5039,12 +5156,13 @@ document.getElementById("cesiumContainer").style.visibility="hidden";
    .then(function(snapshot){
     if(controller!==requestController)return;
     if(!snapshot||(!snapshot.weather&&!snapshot.air_quality&&!snapshot.flood))throw new Error("Point telemetry response contained no feed data.");
-    window.__srPointTelemetry=Object.assign({},snapshot,{cache:snapshot.cache||{hit:false,stale:false}});
+     if(snapshot.cache&&snapshot.cache.stale)return;
+    publishPointTelemetry(Object.assign({},snapshot,{cache:snapshot.cache||{hit:false,stale:false}}),Date.now());
     lastSuccessAt=Date.now();
-    try{localStorage.setItem(CACHE_KEY,JSON.stringify({snapshot:snapshot,cell:cell,savedAt:lastSuccessAt}));}
+    try{localStorage.setItem(CACHE_KEY,JSON.stringify({snapshot:window.__srGetLiveState().point,cell:cell,savedAt:lastSuccessAt}));}
     catch(error){console.warn("Point telemetry cache could not be saved:",error.name);}
-    render();
     document.dispatchEvent(new CustomEvent("saferoute:telemetry-updated"));
+    render();
    })
    .catch(function(error){
     if(controller!==requestController||error.name==="AbortError")return;
@@ -5056,30 +5174,42 @@ document.getElementById("cesiumContainer").style.visibility="hidden";
  readCache();
  render();
  window.addEventListener("saferoute:context",schedule);
+ document.addEventListener("saferoute:location-updated",schedule);
+ document.addEventListener("saferoute:route-updated",schedule);
  window.addEventListener("resize",schedule,{passive:true});
  var map=document.getElementById("sr2dMap");
  if(map){map.addEventListener("pointerup",schedule,{passive:true});map.addEventListener("wheel",schedule,{passive:true});}
  if(window.__srViewer&&window.__srViewer.camera)window.__srViewer.camera.moveEnd.addEventListener(schedule);
- window.addEventListener("saferoute:telemetry-updated",render);
+ document.addEventListener("saferoute:telemetry-updated",render);
  setTimeout(schedule,400);
  setInterval(schedule,60*1000);
 })();
 (function(){
  "use strict";
- var STATE_KEY="sr_live_state_v1",timer=null,inFlight=false,lastWarningAt=0,lastRefreshAt=0,lastCell="",retryAfter={};
+ var STATE_KEY="sr_live_state_v1",STATE_MAX_AGE_MS=5*60*1000,timer=null,inFlight=false,lastWarningAt=0,lastRefreshAt=0,lastCell="",retryAfter={};
  var state={status:"OFFLINE · cached baseline",updatedAt:null,snapshot:null,point:null,assessment:null,nearby:{},endpointStatus:{}};
  try{
   var cached=JSON.parse(localStorage.getItem(STATE_KEY)||"null");
-  if(cached&&typeof cached==="object")state=Object.assign(state,cached);
+  var cacheAge=cached&&Number(cached.updatedAt)?Date.now()-Number(cached.updatedAt):Infinity;
+  if(cached&&typeof cached==="object"&&cacheAge>=0&&cacheAge<=STATE_MAX_AGE_MS)state=Object.assign(state,cached);
+  else if(cached)localStorage.removeItem(STATE_KEY);
+  var snapshotAge=Date.now()-Number(state.snapshotUpdatedAt);
+  if(state.snapshot&&state.status!=="OFFLINE BASELINE"&&
+   (!Number.isFinite(Number(state.snapshotUpdatedAt))||snapshotAge<0||snapshotAge>STATE_MAX_AGE_MS)){
+   state.snapshot=null;state.snapshotUpdatedAt=null;state.status="OFFLINE BASELINE";
+  }
+  if(state.point&&(!Number.isFinite(Number(state.pointUpdatedAt))||Date.now()-Number(state.pointUpdatedAt)>STATE_MAX_AGE_MS)){
+   state.point=null;state.weather=null;state.air_quality=null;state.flood=null;state.pointUpdatedAt=null;
+  }
  }catch(error){console.warn("Live-state cache could not be read:",error.name);}
  function syncFromMap(){
-  if(window.__srLiveSnapshot){state.snapshot=window.__srLiveSnapshot;state.status=window.__srLiveSnapshotBadge||state.status;}
-  if(window.__srPointTelemetry){
-   state.point=window.__srPointTelemetry;
-   state.weather=window.__srPointTelemetry.weather||null;
-   state.air_quality=window.__srPointTelemetry.air_quality||null;
-   state.flood=window.__srPointTelemetry.flood||null;
+  var current=window.__srLiveState||{};
+  var snapshotAge=Date.now()-Number(current.snapshotUpdatedAt);
+  if(current.snapshot&&(current.status==="OFFLINE BASELINE"||
+   (Number.isFinite(Number(current.snapshotUpdatedAt))&&snapshotAge>=0&&snapshotAge<=STATE_MAX_AGE_MS))){
+   state.snapshot=current.snapshot;state.snapshotUpdatedAt=current.snapshotUpdatedAt||null;state.status=current.status||state.status;
   }
+  if(current.point){state.point=current.point;state.pointUpdatedAt=current.pointUpdatedAt||state.pointUpdatedAt;state.weather=current.point.weather||null;state.air_quality=current.point.air_quality||null;state.flood=current.point.flood||null;}
   window.__srLiveState=state;
  }
  function persist(){
@@ -5127,7 +5257,7 @@ document.getElementById("cesiumContainer").style.visibility="hidden";
  window.__srLiveState=state;
  document.addEventListener("saferoute:telemetry-updated",persist);
  document.addEventListener("saferoute:live-state-updated",persist);
- document.addEventListener("saferoute:context",function(){
+ window.addEventListener("saferoute:context",function(){
   clearTimeout(timer);timer=setTimeout(refresh,800);
  });
  var map=document.getElementById("sr2dMap");
