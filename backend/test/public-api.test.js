@@ -37,6 +37,7 @@ test("browser-facing API routes are rate-limited and do not require a client sec
   app.use("/api", require("../routes/ai"));
   app.use("/api", require("../routes/monitoring"));
   app.use("/api", require("../routes/data"));
+  app.use("/api", require("../routes/liveHazards"));
   const server = app.listen(0, "127.0.0.1");
   await new Promise((resolve, reject) => {
     server.once("listening", resolve);
@@ -53,6 +54,7 @@ test("browser-facing API routes are rate-limited and do not require a client sec
       ["/api/data/history?dataset=unknown", "GET", undefined, 400],
       ["/api/data/assessment", "GET", undefined, 400],
       ["/api/data/events?type=current", "GET", undefined, 400],
+      ["/api/hazards/point", "GET", undefined, 400],
     ];
     for (const [requestPath, method, body, expectedStatus] of cases) {
       const response = await request(server, requestPath, method, body);

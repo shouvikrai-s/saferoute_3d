@@ -4,6 +4,8 @@ const TOMTOM_API_KEY = process.env.TOMTOM_API_KEY || "";
 const CACHE_TTL_MS = 15 * 60 * 1000;
 const UPSTREAM_TIMEOUT_MS = 6000;
 const DAILY_TOMTOM_LIMIT = 2499;
+const POINT_CACHE_TTL_MS = 5 * 60 * 1000;
+const POINT_CACHE_MAX = 128;
 
 const CORRIDORS = Object.freeze([
   { district: "East", name: "Gangtok", lat: 27.3389, lon: 88.6065, road: "NH-10 Gangtok–Deorali" },
@@ -19,6 +21,14 @@ const CORRIDORS = Object.freeze([
 let snapshotCache = null;
 let refreshPromise = null;
 const dailyTomTom = new Map();
+const pointCache = new Map();
+const pointRefreshes = new Map();
+
+function finiteNumber(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
 
 function utcDateKey(now = new Date()) {
   return now.toISOString().slice(0, 10);
@@ -56,12 +66,43 @@ async function fetchJson(url, acceptStatuses) {
 }
 
 function classifyLandslide(weather, soilMoisture) {
-  const rain = Number(weather && weather.precipitationSum);
-  const moisture = Number(soilMoisture);
+  const rain = finiteNumber(weather && weather.precipitationSum);
+  const moisture = finiteNumber(soilMoisture);
+  if (rain === null && moisture === null) return "UNKNOWN";
   if ((Number.isFinite(rain) && rain >= 100) || (Number.isFinite(moisture) && moisture >= 0.45)) return "CRITICAL";
   if ((Number.isFinite(rain) && rain >= 60) || (Number.isFinite(moisture) && moisture >= 0.36)) return "HIGH";
   if ((Number.isFinite(rain) && rain >= 25) || (Number.isFinite(moisture) && moisture >= 0.28)) return "MODERATE";
   return "LOW";
+}
+
+function classifyAirQuality(usAqi) {
+  if (usAqi === null) return "NO SAMPLE";
+  if (usAqi <= 50) return "GOOD";
+  if (usAqi <= 100) return "MODERATE";
+  if (usAqi <= 150) return "SENSITIVE";
+  return "UNHEALTHY";
+}
+
+function buildAirQuality(current) {
+  const usAqi = finiteNumber(current.us_aqi);
+  const pm25 = finiteNumber(current.pm2_5);
+  const pm10 = finiteNumber(current.pm10);
+  const visibilityImpact = (usAqi !== null && usAqi > 100) ||
+      (pm25 !== null && pm25 >= 35.5) || (pm10 !== null && pm10 >= 155)
+    ? "Elevated particles may reduce mountain visibility; visibility itself is not measured."
+    : "No AQI-based visibility impact indicated; visibility itself is not measured.";
+  return {
+    us_aqi: usAqi,
+    european_aqi: finiteNumber(current.european_aqi),
+    pm2_5: pm25,
+    pm10,
+    ozone: finiteNumber(current.ozone),
+    nitrogen_dioxide: finiteNumber(current.nitrogen_dioxide),
+    carbon_monoxide: finiteNumber(current.carbon_monoxide),
+    advisory_tier: classifyAirQuality(usAqi),
+    visibility_impact: visibilityImpact,
+    observed_at: current.time || null
+  };
 }
 
 function classifyFlood(discharge) {
@@ -103,9 +144,9 @@ async function fetchFlood(corridor) {
     "&daily=river_discharge&forecast_days=2&timezone=auto";
   const data = await fetchJson(url);
   const discharge = data.daily && data.daily.river_discharge
-    ? Number(data.daily.river_discharge[0])
+    ? finiteNumber(data.daily.river_discharge[0])
     : null;
-  const value = Number.isFinite(discharge) ? discharge : null;
+  const value = finiteNumber(discharge);
   return {
     river_discharge_m3s: value,
     flood_risk: classifyFlood(value)
@@ -116,14 +157,128 @@ async function fetchAir(corridor) {
   const url = "https://air-quality-api.open-meteo.com/v1/air-quality?" +
     "latitude=" + encodeURIComponent(corridor.lat) +
     "&longitude=" + encodeURIComponent(corridor.lon) +
-    "&current=us_aqi,pm2_5,pm10&timezone=auto";
+    "&current=us_aqi,european_aqi,pm2_5,pm10,ozone,nitrogen_dioxide,carbon_monoxide&timezone=auto";
+  const data = await fetchJson(url);
+  return buildAirQuality(data.current || {});
+}
+
+function sumRecentPrecipitation(hourly, hours, now) {
+  const times = Array.isArray(hourly.time) ? hourly.time : [];
+  const values = Array.isArray(hourly.precipitation) ? hourly.precipitation : [];
+  const cutoff = now - hours * 60 * 60 * 1000;
+  let total = 0;
+  let count = 0;
+  for (let i = 0; i < Math.min(times.length, values.length); i++) {
+    const timeValue = String(times[i]);
+    const timestamp = Date.parse(/[zZ]|[+-]\d\d:\d\d$/.test(timeValue) ? timeValue : timeValue + "Z");
+    const precipitation = finiteNumber(values[i]);
+    if (Number.isFinite(timestamp) && timestamp > cutoff && timestamp <= now && precipitation !== null) {
+      total += precipitation;
+      count++;
+    }
+  }
+  return count ? Number(total.toFixed(2)) : null;
+}
+
+function latestHourlyValue(hourly, key, now) {
+  const times = Array.isArray(hourly.time) ? hourly.time : [];
+  const values = Array.isArray(hourly[key]) ? hourly[key] : [];
+  for (let i = Math.min(times.length, values.length) - 1; i >= 0; i--) {
+    const timeValue = String(times[i]);
+    const timestamp = Date.parse(/[zZ]|[+-]\d\d:\d\d$/.test(timeValue) ? timeValue : timeValue + "Z");
+    const value = finiteNumber(values[i]);
+    if (Number.isFinite(timestamp) && timestamp <= now && value !== null) return value;
+  }
+  return null;
+}
+
+async function fetchPointWeather(point) {
+  const url = "https://api.open-meteo.com/v1/forecast?" +
+    "latitude=" + encodeURIComponent(point.lat) +
+    "&longitude=" + encodeURIComponent(point.lon) +
+    "&current=temperature_2m,precipitation,relative_humidity_2m,wind_speed_10m" +
+    "&hourly=precipitation,soil_moisture_27_to_81cm&past_days=7&forecast_days=1&timezone=UTC";
   const data = await fetchJson(url);
   const current = data.current || {};
+  const hourly = data.hourly || {};
+  const now = Date.now();
   return {
-    us_aqi: Number.isFinite(Number(current.us_aqi)) ? Number(current.us_aqi) : null,
-    pm2_5: Number.isFinite(Number(current.pm2_5)) ? Number(current.pm2_5) : null,
-    pm10: Number.isFinite(Number(current.pm10)) ? Number(current.pm10) : null
+    temperature_2m: finiteNumber(current.temperature_2m),
+    current_precipitation_mm: finiteNumber(current.precipitation),
+    precipitation_1h_mm: finiteNumber(current.precipitation),
+    precipitation_24h_mm: sumRecentPrecipitation(hourly, 24, now),
+    precipitation_72h_mm: sumRecentPrecipitation(hourly, 72, now),
+    precipitation_7d_mm: sumRecentPrecipitation(hourly, 168, now),
+    relative_humidity_2m: finiteNumber(current.relative_humidity_2m),
+    wind_speed_10m: finiteNumber(current.wind_speed_10m),
+    soil_moisture_27_to_81cm: latestHourlyValue(hourly, "soil_moisture_27_to_81cm", now),
+    observed_at: current.time || null
   };
+}
+
+async function fetchPointTelemetry(lat, lon) {
+  const point = { lat, lon };
+  const results = await Promise.allSettled([
+    fetchPointWeather(point),
+    fetchAir(point),
+    fetchFlood(point)
+  ]);
+  const weather = results[0].status === "fulfilled" ? results[0].value : null;
+  const airQuality = results[1].status === "fulfilled" ? results[1].value : null;
+  const flood = results[2].status === "fulfilled" ? results[2].value : null;
+  if (!weather && !airQuality && !flood) {
+    throw new Error("Open-Meteo weather, air-quality, and flood feeds did not return data.");
+  }
+  const soilMoisture = weather && weather.soil_moisture_27_to_81cm;
+  return {
+    generatedAt: new Date().toISOString(),
+    coordinates: point,
+    weather,
+    air_quality: airQuality,
+    flood,
+    landslide_risk: weather
+      ? classifyLandslide({ precipitationSum: weather.precipitation_72h_mm }, soilMoisture)
+      : "UNKNOWN",
+    sourceStatus: {
+      weather: results[0].status === "fulfilled" ? "LIVE" : "NO SAMPLE",
+      air_quality: results[1].status === "fulfilled" ? "LIVE" : "NO SAMPLE",
+      flood: results[2].status === "fulfilled" ? "LIVE" : "NO SAMPLE"
+    }
+  };
+}
+
+function refreshPointCache(key, lat, lon) {
+  if (pointRefreshes.has(key)) return pointRefreshes.get(key);
+  const refresh = fetchPointTelemetry(lat, lon)
+    .then(function(snapshot){
+      pointCache.delete(key);
+      pointCache.set(key, { snapshot, timestamp: Date.now() });
+      while (pointCache.size > POINT_CACHE_MAX) {
+        pointCache.delete(pointCache.keys().next().value);
+      }
+      return snapshot;
+    })
+    .finally(function(){ pointRefreshes.delete(key); });
+  pointRefreshes.set(key, refresh);
+  return refresh;
+}
+
+async function getPointTelemetry(lat, lon) {
+  const gridLat = Math.round(lat * 50) / 50;
+  const gridLon = Math.round(lon * 50) / 50;
+  const key = gridLat.toFixed(2) + ":" + gridLon.toFixed(2);
+  const cached = pointCache.get(key);
+  if (cached && Date.now() - cached.timestamp < POINT_CACHE_TTL_MS) {
+    return { snapshot: cached.snapshot, cached: true, stale: false };
+  }
+  if (cached) {
+    refreshPointCache(key, gridLat, gridLon).catch(function(error){
+      console.error("[hazards-point] stale refresh failed:", error.message);
+    });
+    return { snapshot: cached.snapshot, cached: true, stale: true };
+  }
+  const snapshot = await refreshPointCache(key, gridLat, gridLon);
+  return { snapshot, cached: false, stale: false };
 }
 
 async function fetchTraffic(corridor) {
@@ -331,8 +486,13 @@ async function getLiveHazards() {
 
 module.exports = {
   CORRIDORS,
+  buildAirQuality,
+  classifyAirQuality,
   classifyLandslide,
   classifyFlood,
+  fetchPointTelemetry,
+  getPointTelemetry,
   getLiveHazards,
-  refreshLiveSnapshot
+  refreshLiveSnapshot,
+  sumRecentPrecipitation
 };

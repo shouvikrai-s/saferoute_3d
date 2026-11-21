@@ -360,6 +360,8 @@ const server = app.listen(PORT, "0.0.0.0", () => {
   console.log("  GET /api/nearby/tourism");
   console.log("  GET /api/nearby/hazards");
   console.log("  GET /api/nearby/roads");
+  console.log("  GET /api/hazards/live");
+  console.log("  GET /api/hazards/point?lat=..&lon=..");
   console.log("  GET /api/monitoring/status");
   console.log("  GET /api/data/catalog");
   console.log("  GET /api/data/history?dataset=weather|discharge");
