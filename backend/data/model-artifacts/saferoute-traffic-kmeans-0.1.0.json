@@ -1,0 +1,25 @@
+{
+  "modelName": "SafeRouteTrafficKMeans",
+  "modelVersion": "0.1.0",
+  "algorithm": "kmeans",
+  "modelType": "not-trained-kmeans-artifact",
+  "status": "not_trained",
+  "trainingStatus": "not_trained",
+  "trainingDataProvenance": "No verified public traffic dataset is bundled with this repository. A real TomTom/OSM/road-traffic training set with licensing and usage terms must be added before this model can be considered production-ready.",
+  "featureDefinitions": {
+    "relativeSpeed": {
+      "unit": "ratio",
+      "range": [0, 1],
+      "description": "TomTom relative_speed value across a traffic segment; 1.0 indicates free flow and lower values indicate reduced throughput."
+    }
+  },
+  "normalization": "Values are left in the original relative_speed range [0,1] and are validated for out-of-range and stale observations before inference.",
+  "artifactPath": "C:\\projects\\saferoute_3d\\backend\\data\\model-artifacts\\saferoute-traffic-kmeans-0.1.0.json",
+  "centers": [],
+  "evaluation": {
+    "baseline": "not_run",
+    "measured": false,
+    "notes": "No credible licence-cleared traffic dataset is available in the project bundle. Validation is limited to data-quality checks and deterministic model metadata."
+  },
+  "createdAt": "2026-10-10T00:00:00.000Z"
+}

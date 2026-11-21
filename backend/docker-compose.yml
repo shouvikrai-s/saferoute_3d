@@ -1,0 +1,24 @@
+services:
+  saferoute-backend:
+    image: saferoute-backend:latest
+    container_name: saferoute-backend
+    restart: unless-stopped
+
+    ports:
+      - "3000:3000"
+
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      ROUTING_MODE: self_hosted
+      GRAPHHOPPER_SELF_HOSTED_URL: http://host.docker.internal:8998/route
+      REDIS_URL: ${REDIS_URL}
+      POSTGRES_HOST: host.docker.internal
+      POSTGRES_PORT: ${POSTGRES_PORT}
+      POSTGRES_DATABASE: ${POSTGRES_DATABASE}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      SAFEROUTE_CLIENT_KEY: ${SAFEROUTE_CLIENT_KEY}
+
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

@@ -1,0 +1,111 @@
+name: saferoute_3d
+
+description: SafeRoute 3D
+
+publish_to: "none"
+
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+
+  webview_flutter: ^4.13.1
+
+  local_assets_server: ^2.0.2+12
+
+  geolocator: ^13.0.2
+
+  url_launcher: ^6.3.1
+
+  flutter_tts: ^4.2.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/cesium/
+    - assets/cesium/Apps/
+    - assets/cesium/Assets/
+    - assets/cesium/Assets/IAU2006_XYS/
+    - assets/cesium/Assets/Images/
+    - assets/cesium/Assets/Textures/
+    - assets/cesium/Assets/Textures/LensFlare/
+    - assets/cesium/Assets/Textures/maki/
+    - assets/cesium/Assets/Textures/NaturalEarthII/
+    - assets/cesium/Assets/Textures/SkyBox/
+    - assets/cesium/Assets/Textures/NaturalEarthII/0/
+    - assets/cesium/Assets/Textures/NaturalEarthII/1/
+    - assets/cesium/Assets/Textures/NaturalEarthII/2/
+    - assets/cesium/Assets/Textures/NaturalEarthII/0/0/
+    - assets/cesium/Assets/Textures/NaturalEarthII/0/1/
+    - assets/cesium/Assets/Textures/NaturalEarthII/1/0/
+    - assets/cesium/Assets/Textures/NaturalEarthII/1/1/
+    - assets/cesium/Assets/Textures/NaturalEarthII/1/2/
+    - assets/cesium/Assets/Textures/NaturalEarthII/1/3/
+    - assets/cesium/Assets/Textures/NaturalEarthII/2/0/
+    - assets/cesium/Assets/Textures/NaturalEarthII/2/1/
+    - assets/cesium/Assets/Textures/NaturalEarthII/2/2/
+    - assets/cesium/Assets/Textures/NaturalEarthII/2/3/
+    - assets/cesium/Assets/Textures/NaturalEarthII/2/4/
+    - assets/cesium/Assets/Textures/NaturalEarthII/2/5/
+    - assets/cesium/Assets/Textures/NaturalEarthII/2/6/
+    - assets/cesium/Assets/Textures/NaturalEarthII/2/7/
+    - assets/cesium/Core/
+    - assets/cesium/DataSources/
+    - assets/cesium/Renderer/
+    - assets/cesium/Scene/
+    - assets/cesium/Scene/GltfPipeline/
+    - assets/cesium/Scene/Model/
+    - assets/cesium/Scene/Model/Extensions/
+    - assets/cesium/Scene/Model/Extensions/Gpm/
+    - assets/cesium/Shaders/
+    - assets/cesium/Shaders/Appearances/
+    - assets/cesium/Shaders/Builtin/
+    - assets/cesium/Shaders/Materials/
+    - assets/cesium/Shaders/Model/
+    - assets/cesium/Shaders/PostProcessStages/
+    - assets/cesium/Shaders/Voxels/
+    - assets/cesium/Shaders/Builtin/Constants/
+    - assets/cesium/Shaders/Builtin/Functions/
+    - assets/cesium/Shaders/Builtin/Structs/
+    - assets/cesium/ThirdParty/
+    - assets/cesium/ThirdParty/Workers/
+    - assets/cesium/Widget/
+    - assets/cesium/Widgets/
+    - assets/cesium/Widgets/Animation/
+    - assets/cesium/Widgets/BaseLayerPicker/
+    - assets/cesium/Widgets/Cesium3DTilesInspector/
+    - assets/cesium/Widgets/CesiumInspector/
+    - assets/cesium/Widgets/CesiumWidget/
+    - assets/cesium/Widgets/FullscreenButton/
+    - assets/cesium/Widgets/Geocoder/
+    - assets/cesium/Widgets/HomeButton/
+    - assets/cesium/Widgets/I3SBuildingSceneLayerExplorer/
+    - assets/cesium/Widgets/Images/
+    - assets/cesium/Widgets/InfoBox/
+    - assets/cesium/Widgets/NavigationHelpButton/
+    - assets/cesium/Widgets/PerformanceWatchdog/
+    - assets/cesium/Widgets/ProjectionPicker/
+    - assets/cesium/Widgets/SceneModePicker/
+    - assets/cesium/Widgets/SelectionIndicator/
+    - assets/cesium/Widgets/ThirdParty/
+    - assets/cesium/Widgets/Timeline/
+    - assets/cesium/Widgets/Viewer/
+    - assets/cesium/Widgets/VoxelInspector/
+    - assets/cesium/Widgets/VRButton/
+    - assets/cesium/Widgets/Images/ImageryProviders/
+    - assets/cesium/Widgets/Images/NavigationHelp/
+    - assets/cesium/Widgets/Images/TerrainProviders/
+    - assets/cesium/Workers/

@@ -1,0 +1,30 @@
+{
+  "name": "saferoute-backend",
+  "version": "0.2.0",
+  "description": "SafeRoute 3D routing backend (Phase 1: proxy + protect GraphHopper; Phase 2: Redis-backed shared cache/rate-limit + self-hosted GraphHopper readiness)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "process:data": "node scripts/process-datasets.js",
+    "load:historical-data": "node scripts/load-historical-data.js",
+    "test": "node --test test/*.test.js",
+    "train:flood-model": "node scripts/train-flood-model.js",
+    "train:traffic-model": "node scripts/train-traffic-model.js",
+    "loadtest": "node loadtest/route-loadtest.js",
+    "build:client": "node build/minify-helloworld.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "ioredis": "^5.4.1",
+    "pg": "^8.23.0"
+  },
+  "devDependencies": {
+    "autocannon": "^7.15.0",
+    "terser": "^5.51.2"
+  }
+}

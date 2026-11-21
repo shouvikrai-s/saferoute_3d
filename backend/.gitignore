@@ -1,0 +1,6 @@
+node_modules/
+.env
+*.log
+data/*.osm.pbf
+data/*.osrm*
+data/graphhopper-cache/

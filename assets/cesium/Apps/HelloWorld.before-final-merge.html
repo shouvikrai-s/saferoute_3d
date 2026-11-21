@@ -1,0 +1,3147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>SafeRoute 3D</title>
+<script>
+window.CESIUM_BASE_URL = "../";
+</script>
+<script src="../Cesium.js"></script>
+<link href="../Widgets/widgets.css" rel="stylesheet">
+<style>
+/* =====================================================================
+   SafeRoute 3D — UI-1 design system (presentation only)
+   Every selector/ID below existed before; no DOM contract changed.
+   Legacy variable names are kept as aliases at the bottom of :root.
+   ===================================================================== */
+:root{
+ /* --- colour tokens --- */
+ --sr-primary:#2563EB;
+ --sr-primary-strong:#1D4ED8;
+ --sr-primary-soft:#EAF1FF;
+ --sr-success:#16A34A;
+ --sr-success-strong:#15803D;
+ --sr-success-soft:#E8F7ED;
+ --sr-warning:#F59E0B;
+ --sr-warning-ink:#92400E;
+ --sr-warning-soft:#FEF3DC;
+ --sr-danger:#DC2626;
+ --sr-danger-strong:#B91C1C;
+ --sr-danger-soft:#FDECEC;
+ --sr-text:#111827;
+ --sr-text-2:#6B7280;
+ --sr-surface:#FFFFFF;
+ --sr-surface-2:#F3F4F6;
+ --sr-line:#E5E7EB;
+ --sr-navy:#0B1F3A;
+ /* --- shape --- */
+ --sr-r-card:22px;
+ --sr-r-btn:16px;
+ --sr-r-sm:12px;
+ --sr-r-pill:999px;
+ /* --- spacing scale --- */
+ --sr-s1:4px; --sr-s2:8px; --sr-s3:12px; --sr-s4:16px; --sr-s5:20px; --sr-s6:24px;
+ /* --- touch targets --- */
+ --sr-touch:48px;
+ --sr-fab:52px;
+ /* --- type scale --- */
+ --sr-fs-title:18px;
+ --sr-fs-body:14px;
+ --sr-fs-small:12px;
+ --sr-fs-hero:28px;
+ /* --- elevation (kept light: Cesium is rendering underneath) --- */
+ --sr-elev-1:0 1px 3px rgba(17,24,39,0.18), 0 2px 8px rgba(17,24,39,0.12);
+ --sr-elev-sheet:0 -4px 20px rgba(17,24,39,0.20);
+ /* --- safe areas: never let a control sit flush against an edge --- */
+ --sr-safe-top:max(env(safe-area-inset-top, 0px), 12px);
+ --sr-safe-bottom:max(env(safe-area-inset-bottom, 0px), 12px);
+ --sr-safe-left:max(env(safe-area-inset-left, 0px), 12px);
+ --sr-safe-right:max(env(safe-area-inset-right, 0px), 12px);
+ /* --- legacy aliases (names still referenced by existing markup) --- */
+ --sr-bg:var(--sr-surface);
+ --sr-bg-light:var(--sr-surface-2);
+ --sr-border:var(--sr-line);
+ --sr-text-dim:var(--sr-text-2);
+ --sr-accent:var(--sr-primary);
+ --sr-safe:var(--sr-success);
+ --sr-warn:var(--sr-warning);
+ --sr-shadow:var(--sr-elev-1);
+ --sr-radius:var(--sr-r-card);
+ --sr-radius-sm:var(--sr-r-sm);
+}
+html,
+body,
+#cesiumContainer{
+ width:100%;
+ height:100%;
+ margin:0;
+ padding:0;
+ overflow:hidden;
+ background:black;
+ font-family:-apple-system,Roboto,"Segoe UI",sans-serif;
+}
+button{
+ font-family:inherit;
+ -webkit-tap-highlight-color:transparent;
+ touch-action:manipulation;
+}
+button:focus-visible,
+a:focus-visible,
+input:focus-visible{
+ outline:3px solid var(--sr-primary);
+ outline-offset:2px;
+}
+.cesium-viewer-toolbar{
+ z-index:9999;
+ top: var(--sr-safe-top) !important;
+ right: var(--sr-safe-right) !important;
+}
+/* ===================== ICON SYSTEM (inline SVG sprite) ===================== */
+.sr-i{
+ width:22px;
+ height:22px;
+ flex:none;
+ fill:none;
+ stroke:currentColor;
+ stroke-width:2;
+ stroke-linecap:round;
+ stroke-linejoin:round;
+ vertical-align:-5px;
+}
+.sr-i-sm{ width:18px; height:18px; vertical-align:-4px; }
+/* ===================== LOADING / BRAND SURFACE ===================== */
+#loadingOverlay{
+ position:fixed;
+ inset:0;
+ background:var(--sr-navy);
+ z-index:20000;
+ display:flex;
+ flex-direction:column;
+ align-items:center;
+ justify-content:center;
+ color:#FFFFFF;
+ padding:var(--sr-safe-top) var(--sr-safe-right) var(--sr-safe-bottom) var(--sr-safe-left);
+ box-sizing:border-box;
+ text-align:center;
+}
+.sr-brand-mark{ width:56px; height:56px; color:#7FB0FF; stroke-width:1.6; margin-bottom:var(--sr-s3); }
+.sr-brand-name{ font-size:26px; font-weight:800; letter-spacing:0.01em; }
+.sr-brand-tag{ font-size:var(--sr-fs-body); color:rgba(255,255,255,0.78); margin-top:var(--sr-s1); }
+.spinner{
+ width:36px;
+ height:36px;
+ border:4px solid rgba(255,255,255,0.18);
+ border-top-color:#7FB0FF;
+ border-radius:50%;
+ animation:spin 0.9s linear infinite;
+ margin:var(--sr-s6) 0 var(--sr-s3) 0;
+}
+@keyframes spin{ to{ transform:rotate(360deg); } }
+#loadingText{
+ font-size:var(--sr-fs-body);
+ color:rgba(255,255,255,0.78);
+}
+.sr-brand-foot{
+ position:absolute;
+ left:0;
+ right:0;
+ bottom:var(--sr-safe-bottom);
+ font-size:var(--sr-fs-small);
+ line-height:1.6;
+ color:rgba(255,255,255,0.62);
+}
+.sr-brand-foot strong{ color:rgba(255,255,255,0.86); font-weight:600; }
+/* ===================== FLOATING ACTION BUTTONS ===================== */
+.sr-fab{
+ position:absolute;
+ z-index:10000;
+ width:var(--sr-fab);
+ height:var(--sr-fab);
+ padding:0;
+ border-radius:50%;
+ border:1px solid var(--sr-line);
+ background:var(--sr-surface);
+ color:var(--sr-text);
+ box-shadow:var(--sr-elev-1);
+ display:flex;
+ align-items:center;
+ justify-content:center;
+}
+.sr-fab .sr-i{ width:24px; height:24px; vertical-align:baseline; }
+.sr-fab:active{ transform:scale(0.96); }
+.sr-fab-primary{
+ color:var(--sr-primary);
+ bottom: calc(var(--sr-safe-bottom) + 96px);
+ right: var(--sr-safe-right);
+}
+.sr-fab-secondary{
+ color:var(--sr-text);
+ bottom: calc(var(--sr-safe-bottom) + 96px);
+ left: var(--sr-safe-left);
+}
+.sr-fab-search{
+ color:var(--sr-text);
+ bottom: calc(var(--sr-safe-bottom) + 158px);
+ left: var(--sr-safe-left);
+}
+.sr-fab-emergency{
+ background:var(--sr-danger);
+ border-color:var(--sr-danger);
+ color:#FFFFFF;
+ bottom: var(--sr-safe-bottom);
+ left: var(--sr-safe-left);
+ box-shadow:0 2px 10px rgba(220,38,38,0.45);
+}
+/* ===================== SAFETY CHIP ===================== */
+#safetyChip{
+ position:absolute;
+ top: calc(var(--sr-safe-top) + 52px);
+ right: var(--sr-safe-right);
+ z-index:10000;
+ display:flex;
+ align-items:center;
+ gap:var(--sr-s2);
+ min-height:var(--sr-touch);
+ box-sizing:border-box;
+ background:var(--sr-surface);
+ border:2px solid var(--sr-line);
+ color:var(--sr-text);
+ padding:0 var(--sr-s4) 0 var(--sr-s3);
+ border-radius:var(--sr-r-pill);
+ font-size:14px;
+ font-weight:700;
+ box-shadow:var(--sr-elev-1);
+}
+#safetyChip::before{
+ content:"";
+ width:20px;
+ height:20px;
+ flex:none;
+ background-color:var(--sr-text-2);
+ -webkit-mask:var(--sr-chip-icon) center/contain no-repeat;
+ mask:var(--sr-chip-icon) center/contain no-repeat;
+ --sr-chip-icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 3l7.5 3v5.5c0 4.5-3.2 8.2-7.5 9.5-4.3-1.3-7.5-5-7.5-9.5V6z'/%3E%3C/svg%3E");
+}
+/* Initial state (before the first weather result) is deliberately neutral, not green. */
+#safetyChip.sr-chip-pending{ border-color:var(--sr-line); }
+#safetyChip.sr-chip-safe{ border-color:var(--sr-success); }
+#safetyChip.sr-chip-safe::before{
+ background-color:var(--sr-success-strong);
+ --sr-chip-icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 3l7.5 3v5.5c0 4.5-3.2 8.2-7.5 9.5-4.3-1.3-7.5-5-7.5-9.5V6z'/%3E%3Cpath d='M8.8 12l2.4 2.4 4.2-4.6'/%3E%3C/svg%3E");
+}
+#safetyChip.sr-chip-warn{ border-color:var(--sr-warning); color:var(--sr-warning-ink); }
+#safetyChip.sr-chip-warn::before{
+ background-color:var(--sr-warning-ink);
+ --sr-chip-icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 4l9 16H3z'/%3E%3Cpath d='M12 10v4.5M12 17.4v.1'/%3E%3C/svg%3E");
+}
+/* ===================== BOTTOM SHEETS (Safety / Permits / Emergency / Search) ===================== */
+.sr-sheet{
+ display:none;
+ position:fixed;
+ left:0;
+ right:0;
+ bottom:0;
+ z-index:15000;
+ background:var(--sr-surface);
+ border-top-left-radius: var(--sr-r-card);
+ border-top-right-radius: var(--sr-r-card);
+ padding: var(--sr-s3) var(--sr-s5) calc(var(--sr-safe-bottom) + var(--sr-s4)) var(--sr-s5);
+ max-height:65vh;
+ overflow-y:auto;
+ overscroll-behavior:contain;
+ color:var(--sr-text);
+ box-shadow:var(--sr-elev-sheet);
+ font-size:var(--sr-fs-body);
+}
+.sr-sheet-handle{
+ width:40px;
+ height:4px;
+ border-radius:4px;
+ background:#D1D5DB;
+ margin:0 auto var(--sr-s3) auto;
+}
+.sr-sheet-header{
+ display:flex;
+ align-items:center;
+ justify-content:space-between;
+ margin-bottom:var(--sr-s1);
+}
+.sr-sheet-header > div{
+ font-weight:700;
+ font-size:var(--sr-fs-title);
+ line-height:1.3;
+}
+.sr-sheet-close{
+ display:flex;
+ align-items:center;
+ justify-content:center;
+ flex:none;
+ background:var(--sr-surface-2);
+ border:none;
+ color:var(--sr-text);
+ width:var(--sr-touch);
+ height:var(--sr-touch);
+ border-radius:50%;
+ padding:0;
+ margin:calc(var(--sr-s1) * -1) calc(var(--sr-s2) * -1) calc(var(--sr-s1) * -1) var(--sr-s2);
+}
+.sr-sheet-subtitle{
+ font-size:var(--sr-fs-small);
+ line-height:1.45;
+ color:var(--sr-text-2);
+ margin-bottom:var(--sr-s3);
+}
+.sr-sheet-section-title{
+ font-weight:700;
+ font-size:13px;
+ margin-top:var(--sr-s5);
+ margin-bottom:var(--sr-s2);
+ color:var(--sr-text-2);
+}
+.sr-input{
+ width:100%;
+ box-sizing:border-box;
+ height:var(--sr-touch);
+ padding:0 var(--sr-s4);
+ border-radius:var(--sr-r-btn);
+ border:1px solid var(--sr-line);
+ background:var(--sr-surface-2);
+ color:var(--sr-text);
+ font-size:16px;
+ margin-bottom:var(--sr-s3);
+}
+.sr-input::placeholder{ color:#5B6472; }
+/* Weather / risk rows */
+.infoRow{
+ display:flex;
+ justify-content:space-between;
+ align-items:center;
+ min-height:36px;
+ line-height:1.4;
+ font-size:var(--sr-fs-body);
+ border-bottom:1px solid var(--sr-line);
+}
+.infoRow:last-child{ border-bottom:none; }
+.riskyRow{ color:var(--sr-danger-strong); }
+.riskyNote{
+ display:flex;
+ align-items:center;
+ gap:6px;
+ color:var(--sr-danger-strong);
+ font-size:var(--sr-fs-small);
+ font-weight:600;
+ padding:0 0 var(--sr-s2) 0;
+}
+#officialAlertsLinks{
+ display:flex;
+ flex-direction:column;
+ gap:var(--sr-s2);
+}
+#officialAlertsLinks a,
+.permitLink{
+ display:flex;
+ align-items:center;
+ gap:var(--sr-s3);
+ min-height:var(--sr-touch);
+ box-sizing:border-box;
+ color:var(--sr-primary-strong);
+ font-size:var(--sr-fs-body);
+ font-weight:600;
+ text-decoration:none;
+ background:var(--sr-primary-soft);
+ padding:var(--sr-s3) var(--sr-s4);
+ border-radius:var(--sr-r-btn);
+}
+.permitLink{ margin-top:var(--sr-s4); }
+/* Permit sheet rows */
+.permitIntro{
+ font-size:var(--sr-fs-small);
+ color:var(--sr-text-2);
+ margin-bottom:var(--sr-s3);
+ line-height:1.5;
+}
+.permitRow{
+ margin-bottom:var(--sr-s3);
+ padding-bottom:var(--sr-s3);
+ border-bottom:1px solid var(--sr-line);
+}
+.permitRow:last-of-type{ border-bottom:none; }
+.permitPlaceName{
+ font-weight:700;
+ font-size:15px;
+ margin-bottom:var(--sr-s1);
+}
+.permitNote{
+ font-size:13px;
+ color:var(--sr-text-2);
+ line-height:1.5;
+}
+/* Helpline sheet rows (also used for tappable OSM search results) */
+.helplineRow{
+ display:flex;
+ justify-content:space-between;
+ align-items:center;
+ gap:var(--sr-s3);
+ min-height:56px;
+ border-bottom:1px solid var(--sr-line);
+}
+.helplineRow:last-child{ border-bottom:none; }
+.helplineName{ font-size:15px; font-weight:500; color:var(--sr-text); }
+.helplineCallLink{
+ display:inline-flex;
+ align-items:center;
+ justify-content:center;
+ flex:none;
+ min-width:96px;
+ min-height:var(--sr-touch);
+ box-sizing:border-box;
+ background:var(--sr-success-strong);
+ color:#FFFFFF;
+ text-decoration:none;
+ padding:0 var(--sr-s5);
+ border-radius:var(--sr-r-btn);
+ font-size:15px;
+ font-weight:700;
+}
+/* ===================== TAXI POPOVER ===================== */
+#taxiInfoPanel{
+ display:none;
+ position:fixed;
+ left: var(--sr-safe-left);
+ right: var(--sr-safe-right);
+ bottom: calc(var(--sr-safe-bottom) + 96px);
+ z-index:14000;
+ background:var(--sr-surface);
+ color:var(--sr-text);
+ padding:var(--sr-s4);
+ border-radius:var(--sr-r-card);
+ box-shadow:var(--sr-elev-1);
+ border:1px solid var(--sr-line);
+ max-width:340px;
+ margin:0 auto;
+}
+#taxiInfoText{
+ font-size:15px;
+ margin-bottom:var(--sr-s3);
+ line-height:1.45;
+ color:var(--sr-text);
+}
+.sr-btn-accent{
+ width:100%;
+ min-height:52px;
+ padding:0 var(--sr-s4);
+ background:var(--sr-primary);
+ color:#FFFFFF;
+ border:none;
+ border-radius:var(--sr-r-btn);
+ font-size:16px;
+ font-weight:700;
+}
+.sr-btn-accent:active{ background:var(--sr-primary-strong); }
+/* ===================== ROUTE / NAVIGATION CARD ===================== */
+#routeInfoPanel{
+ display:none;
+ position:fixed;
+ left:0;
+ right:0;
+ bottom:0;
+ z-index:13000;
+ background:var(--sr-surface);
+ color:var(--sr-text);
+ padding:var(--sr-s4) var(--sr-s5) calc(var(--sr-safe-bottom) + var(--sr-s4)) var(--sr-s5);
+ border-top-left-radius: var(--sr-r-card);
+ border-top-right-radius: var(--sr-r-card);
+ box-shadow:var(--sr-elev-sheet);
+ max-height:52vh;
+ overflow-y:auto;
+ overscroll-behavior:contain;
+}
+.navHeaderRow{
+ display:flex;
+ justify-content:space-between;
+ align-items:center;
+ margin-bottom:var(--sr-s2);
+}
+.navDestLabel{
+ font-size:13px;
+ font-weight:600;
+ color:var(--sr-text-2);
+}
+/* JS rewrites strong text in rows 1 and 2 live — structure/selectors unchanged. */
+#routeInfoText .infoRow:nth-child(1){
+ font-size:var(--sr-fs-hero);
+ font-weight:800;
+ border-bottom:none;
+ min-height:0;
+ margin-bottom:2px;
+}
+#routeInfoText .infoRow:nth-child(1) span{ display:none; }
+#routeInfoText .infoRow:nth-child(2){
+ font-size:var(--sr-fs-body);
+ color:var(--sr-text-2);
+ border-bottom:none;
+ min-height:0;
+ margin-bottom:var(--sr-s3);
+}
+.routeSectionDivider{
+ margin-top:var(--sr-s3);
+ padding:var(--sr-s3) var(--sr-s4);
+ border-radius:var(--sr-r-btn);
+ background:var(--sr-surface-2);
+ font-size:var(--sr-fs-body);
+ line-height:1.45;
+}
+.altSelectorRow{
+ display:flex;
+ gap:var(--sr-s2);
+ margin-top:2px;
+ margin-bottom:var(--sr-s3);
+}
+.altButton{
+ flex:1;
+ min-height:var(--sr-touch);
+ background:var(--sr-surface-2);
+ color:var(--sr-text);
+ border:1px solid var(--sr-line);
+ border-radius:var(--sr-r-pill);
+ padding:0 var(--sr-s2);
+ font-size:13px;
+ font-weight:600;
+}
+.altButtonSelected{
+ background:var(--sr-primary);
+ border-color:var(--sr-primary);
+ color:#FFFFFF;
+}
+.navBottomRow{
+ display:flex;
+ align-items:center;
+ justify-content:space-between;
+ margin-top:var(--sr-s3);
+}
+#voiceToggleButton{
+ display:inline-flex;
+ align-items:center;
+ gap:6px;
+ min-height:var(--sr-touch);
+ background:var(--sr-surface-2);
+ color:var(--sr-text);
+ border:1px solid var(--sr-line);
+ border-radius:var(--sr-r-pill);
+ padding:0 var(--sr-s4);
+ font-size:14px;
+ font-weight:600;
+}
+#clearRouteButton{
+ min-height:var(--sr-touch);
+ background:var(--sr-danger-soft);
+ color:var(--sr-danger-strong);
+ border:none;
+ border-radius:var(--sr-r-btn);
+ font-size:15px;
+ font-weight:700;
+ padding:0 var(--sr-s5);
+}
+/* ---- Restyle of inline colours the (unchanged) JS writes for a light surface ---- */
+#routeInfoText [style*="#ff9999"]{ color:var(--sr-danger-strong) !important; }
+#routeInfoText [style*="rgba(255,255,255,0.6)"],
+#routeInfoText [style*="rgba(255,255,255,0.5)"]{ color:var(--sr-text-2) !important; }
+#routeInfoText .routeSectionDivider[style*="#8fdc8f"]{
+ color:var(--sr-success-strong) !important;
+ background:var(--sr-success-soft);
+}
+#routeInfoText .routeSectionDivider[style*="#ff6b6b"]{
+ color:var(--sr-danger-strong) !important;
+ background:var(--sr-danger-soft);
+}
+#routeInfoText .routeSectionDivider[style*="#f5a623"]{
+ color:var(--sr-warning-ink) !important;
+ background:var(--sr-warning-soft);
+}
+/* Responsive: slightly larger controls on bigger phones */
+@media (min-width: 420px){
+ .sr-fab{ width:54px; height:54px; }
+}
+
+/* ===================== UI-2..8 SHELL (presentation only) ===================== */
+:root{ --sr-nav-h:calc(64px + var(--sr-safe-bottom)); }
+/* Search: existing Cesium geocoder, restyled as a full-width bar */
+.cesium-viewer-toolbar{ left:var(--sr-safe-left) !important; right:var(--sr-safe-right) !important; }
+.cesium-viewer-geocoderContainer{ display:block !important; width:100% !important; float:none !important; margin:0 !important; }
+.cesium-viewer-geocoderContainer .cesium-geocoder-input,
+.cesium-viewer-geocoderContainer .cesium-geocoder-input-wide{
+ width:100% !important; box-sizing:border-box; height:52px !important; padding:0 56px 0 18px !important;
+ border-radius:20px !important; border:1px solid var(--sr-line) !important; background:var(--sr-surface) !important;
+ color:var(--sr-text) !important; font-size:16px !important; box-shadow:var(--sr-elev-1); opacity:1 !important; visibility:visible !important; }
+.cesium-viewer-geocoderContainer .cesium-geocoder-input::placeholder{ color:var(--sr-text-2); }
+.cesium-viewer-geocoderContainer .cesium-geocoder-searchButton{
+ position:absolute; right:0; top:0; width:52px !important; height:52px !important; border-radius:0 20px 20px 0; background:transparent !important; }
+.cesium-viewer-geocoderContainer .search-results{ width:100% !important; border-radius:16px; overflow:hidden; color:var(--sr-text); }
+.cesium-toolbar-button:not(.cesium-geocoder-searchButton){ display:none !important; }
+#osmSearchButton{ display:none !important; }
+/* Row 2: safety chip (left) + emergency (right) */
+#safetyChip{ top:calc(var(--sr-safe-top) + 64px); left:var(--sr-safe-left); right:auto; max-width:calc(100% - 140px); }
+.sr-fab-emergency{ top:calc(var(--sr-safe-top) + 62px) !important; bottom:auto !important; left:auto !important; right:var(--sr-safe-right);
+ z-index:16000; width:auto; min-width:52px; height:48px; border-radius:24px; padding:0 14px; gap:6px; font-weight:700; font-size:14px; }
+.sr-fab-emergency::after{ content:"SOS"; }
+/* Map-control cluster (existing recenter + permits), right edge */
+.sr-fab-primary,.sr-fab-secondary{ left:auto !important; bottom:auto !important; right:var(--sr-safe-right); z-index:10000; border-radius:0; }
+.sr-fab-primary{ top:calc(var(--sr-safe-top) + 126px); border-radius:18px 18px 0 0; }
+.sr-fab-secondary{ top:calc(var(--sr-safe-top) + 126px + 52px); border-radius:0 0 18px 18px; border-top:none; }
+#profileButton{ top:calc(var(--sr-safe-top) + 126px + 104px); border-radius:18px; margin-top:12px; }
+/* Bottom navigation + layering: Search > Map > Route card > Nav */
+#srNav{ position:fixed; left:0; right:0; bottom:0; z-index:15500; height:var(--sr-nav-h); box-sizing:border-box;
+ padding:0 var(--sr-s3) var(--sr-safe-bottom); display:flex; background:var(--sr-surface); border-top:1px solid var(--sr-line); box-shadow:var(--sr-elev-sheet); }
+#srNav button{ flex:1; min-height:var(--sr-touch); border:none; background:none; color:var(--sr-text-2); font-size:12px; font-weight:600;
+ display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; border-radius:var(--sr-r-btn); }
+#srNav button[aria-current="page"]{ color:var(--sr-primary); background:var(--sr-primary-soft); }
+.sr-sheet{ bottom:var(--sr-nav-h); padding-bottom:var(--sr-s4); max-height:60vh; z-index:15000; }
+#routeInfoPanel{ bottom:var(--sr-nav-h); padding-bottom:var(--sr-s4); max-height:46vh; border-radius:var(--sr-r-card) var(--sr-r-card) 0 0; }
+#taxiInfoPanel{ bottom:calc(var(--sr-nav-h) + 12px); z-index:14000; }
+.cesium-viewer-bottom{ bottom:var(--sr-nav-h) !important; }
+.sr-note{ font-size:12px; color:var(--sr-text-2); line-height:1.5; margin:var(--sr-s2) 0; }
+.sr-row{ display:flex; justify-content:space-between; align-items:center; min-height:48px; border-bottom:1px solid var(--sr-line); font-size:14px; gap:8px; }
+.sr-tag{ font-size:11px; font-weight:700; padding:3px 8px; border-radius:999px; background:var(--sr-surface-2); color:var(--sr-text-2); white-space:nowrap; }
+.sr-chipgrid{ display:flex; flex-wrap:wrap; gap:8px; margin:8px 0; }
+.sr-cat{ min-height:44px; padding:0 14px; border-radius:999px; border:1px dashed var(--sr-line); background:var(--sr-surface-2); color:var(--sr-text-2); font-size:13px; display:inline-flex; align-items:center; }
+.sr-act{ width:100%; min-height:48px; margin:6px 0; border-radius:var(--sr-r-btn); border:1px solid var(--sr-line); background:var(--sr-surface); color:var(--sr-text); font-size:15px; font-weight:600; }
+.sr-act.primary{ background:var(--sr-primary); border-color:var(--sr-primary); color:#fff; }
+#safetyChip.sr-chip-pending::before{ background-color:var(--sr-text-2); }
+/* ---- Final pass ---- */
+.sr-cat[data-cat]{ border-style:solid; background:var(--sr-primary-soft); color:var(--sr-primary-strong); font-weight:600; cursor:pointer; }
+.sr-cat[aria-pressed="true"]{ background:var(--sr-primary); color:#fff; }
+.sr-cat[aria-disabled="true"]{ opacity:.75; }
+.sr-place{ display:flex; align-items:center; justify-content:space-between; gap:8px; min-height:56px; border-bottom:1px solid var(--sr-line); font-size:14px; }
+.sr-place small{ display:block; color:var(--sr-text-2); font-size:12px; }
+.sr-place button{ min-height:48px; min-width:72px; border:none; border-radius:var(--sr-r-btn); background:var(--sr-primary); color:#fff; font-weight:700; }
+.navDestLabel.sr-st-rerouting{ color:var(--sr-warning-ink); }
+.navDestLabel.sr-st-arrived{ color:var(--sr-success-strong); font-size:16px; font-weight:800; }
+.sr-sheet,#routeInfoPanel{ transition:none; }
+@media (min-width:768px){
+ .sr-sheet,#routeInfoPanel{ left:50% !important; right:auto !important; width:min(560px,100%); transform:translateX(-50%); }
+ #srNav{ justify-content:center; } #srNav button{ max-width:200px; }
+}
+@media (max-height:500px) and (orientation:landscape){
+ .sr-sheet{ max-height:78vh; } #routeInfoPanel{ max-height:62vh; }
+ #srNav{ height:calc(52px + var(--sr-safe-bottom)); } :root{ --sr-nav-h:calc(52px + var(--sr-safe-bottom)); }
+ #srNav button{ flex-direction:row; justify-content:center; gap:6px; }
+}
+@media (prefers-reduced-motion:reduce){ *{ animation-duration:.01ms !important; transition-duration:.01ms !important; } }
+#srOffline{ display:none; position:fixed; left:var(--sr-safe-left); right:var(--sr-safe-right); bottom:calc(var(--sr-nav-h) + 8px); z-index:15400; background:var(--sr-navy); color:#fff; border-radius:var(--sr-r-sm); padding:10px 14px; font-size:13px; line-height:1.4; }
+</style>
+</head>
+<body>
+<!-- UI-1 icon sprite: stroke icons, currentColor, no external dependency -->
+<svg xmlns="http://www.w3.org/2000/svg" width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+<symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l7.5 3v5.5c0 4.5-3.2 8.2-7.5 9.5-4.3-1.3-7.5-5-7.5-9.5V6z"/></symbol>
+<symbol id="i-shield-check" viewBox="0 0 24 24"><path d="M12 3l7.5 3v5.5c0 4.5-3.2 8.2-7.5 9.5-4.3-1.3-7.5-5-7.5-9.5V6z"/><path d="M8.8 12l2.4 2.4 4.2-4.6"/></symbol>
+<symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 4l9 16H3z"/><path d="M12 10v4.5M12 17.4v.1"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+<symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+<symbol id="i-phone" viewBox="0 0 24 24"><path d="M6.6 3.5h3l1.5 4-2 1.3a11 11 0 005.1 5.1l1.3-2 4 1.5v3a2 2 0 01-2.2 2A15.5 15.5 0 014.6 5.7a2 2 0 012-2.2z"/></symbol>
+<symbol id="i-locate" viewBox="0 0 24 24"><circle cx="12" cy="12" r="6.5"/><circle cx="12" cy="12" r="2" fill="currentColor"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3"/></symbol>
+<symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></symbol>
+<symbol id="i-volume" viewBox="0 0 24 24"><path d="M4 9.5v5h3.5L12 18.5v-13L7.5 9.5z"/><path d="M15.5 9a4 4 0 010 6M18 6.5a7.5 7.5 0 010 11"/></symbol>
+<symbol id="i-volume-off" viewBox="0 0 24 24"><path d="M4 9.5v5h3.5L12 18.5v-13L7.5 9.5z"/><path d="M16 9.5l5 5M21 9.5l-5 5"/></symbol>
+<symbol id="i-external" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 01-1 1H5a1 1 0 01-1-1V7a1 1 0 011-1h5"/></symbol>
+<symbol id="i-file" viewBox="0 0 24 24"><path d="M7 3h7l5 5v12a1 1 0 01-1 1H7a1 1 0 01-1-1V4a1 1 0 011-1z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></symbol>
+<symbol id="i-map" viewBox="0 0 24 24"><path d="M9 4L3.5 6v14L9 18l6 2 5.5-2V4L15 6z"/><path d="M9 4v14M15 6v14"/></symbol>
+<symbol id="i-compass" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/></symbol>
+<symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="3.5"/><path d="M5 20c.8-3.6 3.5-5.5 7-5.5s6.2 1.9 7 5.5"/></symbol>
+</svg>
+<div id="cesiumContainer"></div>
+<div id="loadingOverlay">
+ <svg class="sr-i sr-brand-mark" aria-hidden="true" focusable="false"><use href="#i-shield-check"/></svg>
+ <div class="sr-brand-name">SafeRoute 3D</div>
+ <div class="sr-brand-tag">Explore the Eastern Himalayas</div>
+ <div class="spinner"></div>
+ <div id="loadingText">Loading 3D Map...</div>
+ <div class="sr-brand-foot">Sikkim &bull; Darjeeling &bull; Kalimpong<br>Created by <strong>Shouvik Rai</strong> &middot; Powered by <strong>SafeRoute 3D</strong></div>
+</div>
+<!-- Compact safety chip — tap to expand full safety sheet -->
+<button id="safetyChip" class="sr-chip sr-chip-pending" aria-label="Open safety details">
+ <span id="safetyChipText">Safety: Checking…</span>
+</button>
+<!-- Safety sheet: rainfall data (NOT official river-gauge data), hazard zones, official links -->
+<div id="weatherRiskPanel" class="sr-sheet">
+ <div class="sr-sheet-handle"></div>
+ <div class="sr-sheet-header">
+ <div id="weatherRiskTitle">Rainfall-Based Flood/Landslide Risk</div>
+ <button id="safetySheetClose" class="sr-sheet-close" aria-label="Close"><svg class="sr-i" aria-hidden="true" focusable="false"><use href="#i-x"/></svg></button>
+ </div>
+ <div class="sr-sheet-subtitle">Live rainfall readings (Open-Meteo) — not official river-gauge data</div>
+ <div id="weatherRiskText"></div>
+ <div class="sr-row"><span>Rainfall</span><span class="sr-tag" id="srRainTag">Checking</span></div>
+ <div class="sr-row"><span>Flood intelligence</span><span class="sr-tag">Unavailable</span></div>
+ <div class="sr-row"><span>Landslide intelligence</span><span class="sr-tag">Requires data integration</span></div>
+ <div class="sr-note">The level above uses current rainfall only (Open-Meteo). It is not an official warning.</div>
+ <button class="sr-act" id="safetyOpenEmergency">Emergency &amp; Help</button>
+ <div class="sr-note">SafeRoute 3D is an independent app, not government-owned or officially affiliated. Links below are external official resources.</div>
+ <div class="sr-sheet-section-title">Official Alerts (external links only)</div>
+ <div id="officialAlertsLinks">
+ <a href="https://sachet.ndma.gov.in/"><svg class="sr-i" aria-hidden="true" focusable="false"><use href="#i-external"/></svg><span>SACHET — National Disaster Alerts</span></a>
+ <a href="https://ssdma.nic.in/"><svg class="sr-i" aria-hidden="true" focusable="false"><use href="#i-external"/></svg><span>SSDMA Sikkim — Official Resources</span></a>
+ </div>
+</div>
+<!-- Permit info: secondary control, own sheet -->
+<button id="permitButton" class="sr-fab sr-fab-secondary" title="Permit / Restricted Area Info" aria-label="Permits and restricted areas"><svg class="sr-i" aria-hidden="true" focusable="false"><use href="#i-file"/></svg></button>
+<div id="permitPanel" class="sr-sheet">
+ <div class="sr-sheet-handle"></div>
+ <div class="sr-sheet-header">
+ <div id="permitTitle">Permits & Restricted Areas</div>
+ <button id="permitSheetClose" class="sr-sheet-close" aria-label="Close"><svg class="sr-i" aria-hidden="true" focusable="false"><use href="#i-x"/></svg></button>
+ </div>
+ <div class="permitIntro">Indians need no permit to enter Sikkim. Foreigners need an Inner Line Permit (ILP) just to enter, plus a permit below for restricted areas. Rules can change — verify locally before travel.</div>
+ <div class="permitRow">
+ <div class="permitPlaceName">Nathula Pass</div>
+ <div class="permitNote">Indians: Permit required (fee: verify with official source). Foreigners: NOT allowed, no exceptions.</div>
+ </div>
+ <div class="permitRow">
+ <div class="permitPlaceName">Tsomgo (Changu) Lake / Baba Mandir</div>
+ <div class="permitNote">Indians and foreigners: Permit required.</div>
+ </div>
+ <div class="permitRow">
+ <div class="permitPlaceName">Zuluk / Old Silk Route</div>
+ <div class="permitNote">Indians: Permit required. Foreigners: NOT allowed.</div>
+ </div>
+ <div class="permitRow">
+ <div class="permitPlaceName">North Sikkim: Lachen, Lachung, Yumthang, Zero Point</div>
+ <div class="permitNote">Indians and foreigners: Permit required, usually via registered tour operator.</div>
+ </div>
+ <div class="permitRow">
+ <div class="permitPlaceName">Gurudongmar Lake</div>
+ <div class="permitNote">Indians: Permit required. Foreigners: NOT allowed.</div>
+ </div>
+ <div class="permitRow">
+ <div class="permitPlaceName">Dzongri / Goechala Trek</div>
+ <div class="permitNote">Indians and foreigners: Trekking permit required.</div>
+ </div>
+ <a class="permitLink" href="https://www.sikkim.gov.in/department/departmentmenudetails?url=Menu=tourism-civil-aviation-department/general-info"><svg class="sr-i" aria-hidden="true" focusable="false"><use href="#i-external"/></svg><span>Official Sikkim Tourism Permit Info</span></a>
+</div>
+<button id="osmSearchButton" class="sr-fab sr-fab-search" title="Search places and roads" aria-label="Search places and roads"><svg class="sr-i" aria-hidden="true" focusable="false"><use href="#i-search"/></svg></button>
+<div id="osmSearchPanel" class="sr-sheet">
+ <div class="sr-sheet-handle"></div>
+ <div class="sr-sheet-header">
+ <div>Explore</div>
+ <button id="osmSearchClose" class="sr-sheet-close" aria-label="Close"><svg class="sr-i" aria-hidden="true" focusable="false"><use href="#i-x"/></svg></button>
+ </div>
+ <div class="sr-sheet-subtitle">Searches names discovered so far while browsing the map — not all of Sikkim yet</div>
+ <div class="sr-note">Eastern Himalayan tourism. Sikkim is a state; Darjeeling and Kalimpong are in West Bengal, not Sikkim.</div>
+ <div class="sr-chipgrid" role="group" aria-label="Categories with data">
+  <button class="sr-cat" data-cat="hospital" aria-pressed="false">Hospitals</button>
+  <button class="sr-cat" data-cat="police" aria-pressed="false">Police</button>
+  <button class="sr-cat" data-cat="dam" aria-pressed="false">Dams (reference)</button>
+ </div>
+ <div id="srExploreList" aria-live="polite"></div>
+ <div class="sr-note" id="srExploreNote">Hospitals, police and dams come from a built-in Sikkim reference list (Google Places, July 2026). It may be outdated: verify before travel. Dams are not live monitoring.</div>
+ <div class="sr-sheet-section-title">Not available yet</div>
+ <div class="sr-chipgrid"><span class="sr-cat" aria-disabled="true" title="Place data requires integration">Tourist places &middot; data required</span><span class="sr-cat" aria-disabled="true" title="Place data requires integration">Viewpoints &middot; data required</span><span class="sr-cat" aria-disabled="true" title="Place data requires integration">Attractions &middot; data required</span><span class="sr-cat" aria-disabled="true" title="Place data requires integration">Hotels &middot; data required</span><span class="sr-cat" aria-disabled="true" title="Place data requires integration">Food &middot; data required</span><span class="sr-cat" aria-disabled="true" title="Place data requires integration">Cafes &middot; data required</span><span class="sr-cat" aria-disabled="true" title="Place data requires integration">Fuel &middot; data required</span><span class="sr-cat" aria-disabled="true" title="Place data requires integration">Parking &middot; data required</span><span class="sr-cat" aria-disabled="true" title="Place data requires integration">Pharmacies &middot; data required</span><span class="sr-cat" aria-disabled="true" title="Place data requires integration">ATMs &middot; data required</span><span class="sr-cat" aria-disabled="true" title="Place data requires integration">EV charging &middot; data required</span></div>
+ <div class="sr-note">No place data exists for these categories, so no listings, ratings, prices or hours are shown. Taxis appear on the map as demo markers. Restricted areas: see Permits.</div>
+ <button class="sr-act" id="exploreOpenPermits">Permits &amp; restricted areas</button>
+ <a class="sr-act" style="display:flex;align-items:center;justify-content:center;text-decoration:none;box-sizing:border-box" href="https://www.sikkim.gov.in/department/departmentmenudetails?url=Menu=tourism-civil-aviation-department/general-info">Sikkim Tourism (official site)</a>
+ <input id="osmSearchInput" class="sr-input" type="text" placeholder="Type a town, village, or road name...">
+ <div id="osmSearchResults"></div>
+</div>
+<!-- Emergency: visually distinct (red), separated from routine controls. Opens a panel first — never dials directly. -->
+<button id="helplineButton" class="sr-fab sr-fab-emergency" title="Emergency Helplines" aria-label="Emergency helplines"><svg class="sr-i" aria-hidden="true" focusable="false"><use href="#i-phone"/></svg></button>
+<div id="helplinePanel" class="sr-sheet">
+ <div class="sr-sheet-handle"></div>
+ <div class="sr-sheet-header">
+ <div id="helplineTitle">Emergency Helplines</div>
+ <button id="helplineSheetClose" class="sr-sheet-close" aria-label="Close"><svg class="sr-i" aria-hidden="true" focusable="false"><use href="#i-x"/></svg></button>
+ </div>
+ <div class="sr-sheet-subtitle">Tap a number to open your phone's dialer — nothing is called automatically</div>
+ <div class="helplineRow"><span class="helplineName">Police</span><a class="helplineCallLink" href="tel:100">Call 100</a></div>
+ <div class="helplineRow"><span class="helplineName">All-India Emergency</span><a class="helplineCallLink" href="tel:112">Call 112</a></div>
+ <div class="helplineRow"><span class="helplineName">Fire</span><a class="helplineCallLink" href="tel:101">Call 101</a></div>
+ <div class="helplineRow"><span class="helplineName">Ambulance (Trauma)</span><a class="helplineCallLink" href="tel:108">Call 108</a></div>
+ <div class="helplineRow"><span class="helplineName">Ambulance (Maternal/Child)</span><a class="helplineCallLink" href="tel:102">Call 102</a></div>
+ <div class="helplineRow"><span class="helplineName">Health Helpline</span><a class="helplineCallLink" href="tel:104">Call 104</a></div>
+ <div class="helplineRow"><span class="helplineName">Sikkim Police Support</span><a class="helplineCallLink" href="tel:03592202746">Call</a></div>
+</div>
+<!-- Recenter: primary map control -->
+<button id="recenterButton" class="sr-fab sr-fab-primary" title="Recenter on my location" aria-label="Recenter on my location"><svg class="sr-i" aria-hidden="true" focusable="false"><use href="#i-locate"/></svg></button>
+<!-- Taxi selection popover (temporary, appears above the nav card area) -->
+<div id="taxiInfoPanel">
+ <div id="taxiInfoText"></div>
+ <div class="sr-note"><span class="sr-tag">SIMULATED / DEMO</span> Demo taxi positions are simulated. Not live drivers; no booking is made.</div>
+ <button id="requestTaxiButton" class="sr-btn-accent">Route to this taxi</button>
+</div>
+<!-- Bottom navigation card — ONLY visible while a route is active -->
+<div id="routeInfoPanel">
+ <div class="navHeaderRow">
+ <div class="navDestLabel">Route to destination</div>
+ </div>
+ <div id="routeInfoText"></div>
+ <div class="navBottomRow">
+ <button id="clearRouteButton">Clear Route</button>
+ </div>
+</div>
+<button id="profileButton" class="sr-fab sr-fab-secondary" aria-label="Profile and settings"><svg class="sr-i" aria-hidden="true" focusable="false"><use href="#i-user"/></svg></button>
+<div id="profilePanel" class="sr-sheet">
+ <div class="sr-sheet-handle"></div>
+ <div class="sr-sheet-header"><div>Profile &amp; Settings</div><button id="profileClose" class="sr-sheet-close" aria-label="Close"><svg class="sr-i" aria-hidden="true" focusable="false"><use href="#i-x"/></svg></button></div>
+ <div class="sr-sheet-section-title">Account</div>
+ <div class="sr-row"><span>Guest</span><span class="sr-tag">Active</span></div>
+ <div class="sr-note">Account functionality requires backend integration. Sign-in is not available.</div>
+<div class="sr-sheet-section-title">Navigation</div>
+ <div class="sr-row"><span>Voice guidance</span><span class="sr-tag">Toggle in route card</span></div>
+ <div class="sr-row"><span>Route preferences / avoid risky roads</span><span class="sr-tag">Not available yet</span></div>
+ <div class="sr-row"><span>Units</span><span class="sr-tag">Not available yet</span></div>
+<div class="sr-sheet-section-title">Safety</div>
+ <button class="sr-act" id="profileOpenEmergency">Emergency contacts</button>
+ <div class="sr-row"><span>Safety notifications / hazard alerts</span><span class="sr-tag">Backend required</span></div>
+<div class="sr-sheet-section-title">Map</div>
+ <div class="sr-row"><span>3D mode, terrain, labels</span><span class="sr-tag">Fixed in this version</span></div>
+<div class="sr-sheet-section-title">Personal</div>
+ <div class="sr-row"><span>Home, saved places, favorites, recent routes</span><span class="sr-tag">Storage not built</span></div>
+<div class="sr-sheet-section-title">Other</div>
+ <div class="sr-row"><span>Language</span><span class="sr-tag">English only</span></div>
+ <div class="sr-row"><span>Notifications</span><span class="sr-tag">Not available yet</span></div>
+ <div class="sr-row"><span>Privacy</span><span class="sr-tag">Policy not published</span></div>
+ <button class="sr-act" id="profileOpenAI">SafeRoute AI (not connected)</button>
+<div class="sr-sheet-section-title">About SafeRoute 3D</div>
+ <div class="sr-note">Safety and navigation for Sikkim. An independent app, not government-owned or officially affiliated.<br>Created by Shouvik Rai &middot; Powered by SafeRoute 3D</div>
+</div>
+<div id="aiPanel" class="sr-sheet">
+ <div class="sr-sheet-handle"></div>
+ <div class="sr-sheet-header"><div>SafeRoute AI</div><button id="aiClose" class="sr-sheet-close" aria-label="Close"><svg class="sr-i" aria-hidden="true" focusable="false"><use href="#i-x"/></svg></button></div>
+ <div class="sr-note"><span class="sr-tag">NOT CONNECTED</span> No AI service is integrated, so there are no AI answers. For emergencies use Emergency &amp; Help, not this screen.</div>
+ <div class="sr-chipgrid"><span class="sr-cat" aria-disabled="true">Explain my route</span><span class="sr-cat" aria-disabled="true">Is this route safe?</span><span class="sr-cat" aria-disabled="true">Explain current conditions</span><span class="sr-cat" aria-disabled="true">Trip preparation</span></div>
+ <div class="sr-note">Planned: answers grounded only in app data (route, rainfall, listed resources); never inventing closures, alerts or numbers.</div>
+</div>
+<div id="srOffline" role="status" aria-live="polite">Offline. Search, rainfall and routing need a connection; safety data is unavailable until you reconnect.</div>
+<nav id="srNav" aria-label="Main">
+ <button id="navMap" aria-current="page"><svg class="sr-i" aria-hidden="true" focusable="false"><use href="#i-map"/></svg>Map</button>
+ <button id="navExplore"><svg class="sr-i" aria-hidden="true" focusable="false"><use href="#i-compass"/></svg>Explore</button>
+ <button id="navSafety"><svg class="sr-i" aria-hidden="true" focusable="false"><use href="#i-shield-check"/></svg>Safety</button>
+</nav>
+<script>
+(function(){
+ var $=function(i){return document.getElementById(i);};
+ var SR_PANELS=["osmSearchPanel","weatherRiskPanel","permitPanel","helplinePanel","profilePanel","aiPanel"];
+ function hideAll(){ SR_PANELS.forEach(function(id){ $(id).style.display="none"; }); }
+ function hideProfile(){ $("profilePanel").style.display="none"; $("aiPanel").style.display="none"; }
+ function sync(){
+  var cur="navMap";
+  if($("osmSearchPanel").style.display==="block") cur="navExplore";
+  if($("weatherRiskPanel").style.display==="block") cur="navSafety";
+  ["navMap","navExplore","navSafety"].forEach(function(id){ if(id===cur) $(id).setAttribute("aria-current","page"); else $(id).removeAttribute("aria-current"); });
+ }
+ SR_PANELS.forEach(function(id){
+  new MutationObserver(sync).observe($(id),{attributes:true,attributeFilter:["style"]});
+ });
+ $("navMap").addEventListener("click",function(){ hideAll(); sync(); });
+ $("navExplore").addEventListener("click",function(){ hideProfile(); if($("osmSearchPanel").style.display!=="block") $("osmSearchButton").click(); });
+ $("navSafety").addEventListener("click",function(){ hideProfile(); if($("weatherRiskPanel").style.display!=="block") $("safetyChip").click(); });
+ $("profileButton").addEventListener("click",function(){ var o=$("profilePanel").style.display==="block"; hideAll(); $("profilePanel").style.display=o?"none":"block"; });
+ $("profileClose").addEventListener("click",hideProfile);
+ ["safetyChip","helplineButton","permitButton"].forEach(function(id){ $(id).addEventListener("click",hideProfile,true); });
+ $("profileOpenAI").addEventListener("click",function(){ hideAll(); $("aiPanel").style.display="block"; });
+ $("aiClose").addEventListener("click",function(){ $("aiPanel").style.display="none"; });
+ document.addEventListener("keydown",function(e){ if(e.key==="Escape"){ hideAll(); sync(); } });
+ // AI integration boundary: context from real app state only; no service is connected.
+ window.SafeRouteAI={ endpoint:null, connected:false,
+  buildContext:function(){ var q=function(x){var n=document.querySelector(x);return n?n.textContent:null;};
+   return { safetyChip:q("#safetyChipText"), distance:q("#routeInfoText .infoRow:nth-child(1) strong"), eta:q("#routeInfoText .infoRow:nth-child(2) strong") }; },
+  ask:function(){ return Promise.reject(new Error("SafeRoute AI service is not connected")); } };
+ // Visible navigation states (hooked from existing reroute/arrival code)
+ var lbl=document.querySelector(".navDestLabel");
+ window.__srNavState=function(st){ lbl.className="navDestLabel sr-st-"+st; lbl.textContent= st==="arrived"?"You have arrived":"Rerouting\u2026"; };
+ new MutationObserver(function(){ if(lbl.className.indexOf("rerouting")>-1){ lbl.className="navDestLabel"; lbl.textContent="Route to destination"; } }).observe($("routeInfoText"),{childList:true});
+ // Explore list from the built-in reference data
+ var cats=document.querySelectorAll(".sr-cat[data-cat]");
+ cats.forEach(function(c){ c.addEventListener("click",function(){
+  cats.forEach(function(x){x.setAttribute("aria-pressed",x===c?"true":"false");});
+  var list=$("srExploreList"); list.textContent="";
+  var br=window.__srBridge; if(!br){ list.textContent="Place data is not loaded yet. Try again in a moment."; return; }
+  var items=br.resources.filter(function(r){return r.type===c.dataset.cat;});
+  if(!items.length){ list.textContent="No places available yet."; return; }
+  items.forEach(function(r){ var d=document.createElement("div"); d.className="sr-place";
+   var t=document.createElement("div"); t.textContent=r.name; var sm=document.createElement("small"); sm.textContent=r.district+" District, Sikkim"; t.appendChild(sm);
+   d.appendChild(t);
+   if(c.dataset.cat!=="dam"){ var b=document.createElement("button"); b.textContent="Route"; b.setAttribute("aria-label","Route to "+r.name);
+    b.addEventListener("click",function(){ hideAll(); sync(); br.route(r.lat,r.lon); }); d.appendChild(b); }
+   list.appendChild(d); }); }); });
+ $("exploreOpenPermits").addEventListener("click",function(){ $("permitButton").click(); });
+ $("safetyOpenEmergency").addEventListener("click",function(){ $("helplineButton").click(); });
+ $("profileOpenEmergency").addEventListener("click",function(){ $("helplineButton").click(); });
+ // Offline / stuck-loading honesty (presentation only)
+ function net(){ $("srOffline").style.display=navigator.onLine?"none":"block"; }
+ window.addEventListener("online",net); window.addEventListener("offline",net); net();
+ setTimeout(function(){ var c=$("safetyChipText"); if(c.textContent.indexOf("Checking")>-1){ c.textContent="Safety data unavailable"; } },20000);
+ SR_PANELS.forEach(function(id){ var e=$(id); e.setAttribute("role","dialog"); e.setAttribute("aria-label",id.replace("Panel","")); });
+ $("safetyChip").setAttribute("aria-live","polite");
+ // Search bar copy only; the Cesium geocoder itself is untouched.
+ var tries=0,t=setInterval(function(){
+  var inp=document.querySelector(".cesium-geocoder-input");
+  if(inp){ inp.placeholder="Where do you want to go?"; inp.setAttribute("aria-label","Where do you want to go?"); clearInterval(t); }
+  else if(++tries>60) clearInterval(t);
+ },500);
+})();
+</script>
+<script>
+console.log("=================================");
+console.log("SafeRoute 3D Starting...");
+console.log("=================================");
+window.onerror = function(message, source, line, column, error){
+ console.error("JS ERROR");
+ console.error(message);
+ console.error(source);
+ console.error(line);
+ console.error(column);
+ console.error(error);
+};
+window.addEventListener("unhandledrejection", function(event){
+ console.error("PROMISE ERROR");
+ console.error(event.reason);
+});
+Cesium.Ion.defaultAccessToken =
+ "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIyMGZkOGE4YS1jODEwLTQ2MzctYTE2MC05OTlkZTczYWNhMDciLCJpZCI6NDE1OTcyLCJpYXQiOjE3NzU3NDYwMjB9.o7_SRyCIMRxQ-NaCn7e73399qqJsRJs13G8xegkW1Kg";
+// SCALABILITY MIGRATION PATH (documentation only):
+// Phase 1: client-side caching/throttling/dedup (this phase)
+// Phase 2: central backend/cache for weather
+// Phase 3: self-hosted GraphHopper
+// Phase 4: preprocessed offline Sikkim+Kalimpong OSM data
+// Phase 5: production monitoring/scaling infrastructure
+//
+// ROUTING BACKEND ABSTRACTION — mode:"graphhopper" keeps current behavior.
+// Future self-hosted GraphHopper can be enabled by changing ROUTING_CONFIG
+// mode to "backend" and setting backendUrl. The existing calculateRoute()
+// parsing remains unchanged because self-hosted GraphHopper uses the same
+// response schema expected by this application.
+//
+// FUTURE BACKEND CONTRACT:
+// GET {backendUrl}?startLat=..&startLon=..&endLat=..&endLon=..
+// Response must contain GraphHopper-compatible paths[] data.
+//
+// 700K-USER MIGRATION PATH:
+// Stage 1 (done): client-side dedup/stale-response/throttle guards
+// Stage 2 (next): self-hosted GraphHopper, flip mode -> "backend"
+// Stage 3: shared backend weather cache
+// Stage 4: offline Sikkim+Kalimpong OSM data
+// Stage 5: production scaling (proxy/cache/monitoring)
+const ROUTING_CONFIG = {
+ // ===================================================================
+ // FIX for "route request times out on physical Android phone":
+ // 10.0.2.2 is a special alias that ONLY exists inside the Android
+ // EMULATOR's virtual network (it maps to the host machine's
+ // 127.0.0.1). A physical phone has no such interface at all, so a
+ // request to 10.0.2.2 fails immediately at the OS level with a
+ // connection timeout — this matches the ERR_CONNECTION_TIMED_OUT
+ // symptom exactly, independent of anything else in this file.
+ //
+ // For a physical phone on the same Wi-Fi as your backend machine, use
+ // that machine's actual LAN IP instead. Find it with:
+ //   Windows:      ipconfig            -> "IPv4 Address"
+ //   Mac/Linux:    ifconfig | ip addr  -> look for your Wi-Fi interface
+ // (matches the "Reachable from other devices on the same network at"
+ // lines server.js now prints on startup).
+ //
+ // BEFORE trusting this, verify from the PHONE'S OWN BROWSER (not this
+ // app) that http://<that IP>:3000/health loads and returns JSON. If it
+ // doesn't, the problem is Windows Firewall or the phone being on a
+ // different network — not this file (see delivery notes checklist).
+ // ===================================================================
+ // SECURITY FIX (Phase 11, Step 1): this previously also had a
+ // "graphhopper" direct-cloud-call mode carrying a hardcoded
+ // GraphHopper API key as a client-readable literal. That mode was
+ // confirmed DEAD — mode has been "backend" for several phases, so the
+ // key was never reached by live code, yet still shipped readable in
+ // this file. Removed entirely rather than left disabled, since a
+ // dormant secret is still a leaked secret. The backend now owns all
+ // GraphHopper credentials server-side (see backend/.env, never sent
+ // to the client). If a direct-cloud fallback mode is ever needed
+ // again, it must fetch a short-lived token from the backend at
+ // runtime — never embed a raw provider key in client code again.
+ // ===================================================================
+ mode: "backend",
+ backendUrl: "http://192.168.1.6:8080/api/route" // compulsory: confirmed PC LAN IP is .5, not .2 — do not revert
+};
+// Abuse-reduction key (Phase 11, Step 4) — matches SAFEROUTE_CLIENT_KEY
+// in backend/.env. This is intentionally NOT secret-grade: it lives in
+// shipped client code by necessity for a login-free public app. See
+// the header comment at the fetch() call site for the honest scope of
+// what this does and doesn't protect against.
+const SAFEROUTE_CLIENT_KEY = "";
+function buildRouteUrl(startLat, startLon, endLat, endLon){
+ if (!ROUTING_CONFIG.backendUrl) {
+ throw new Error("ROUTING_CONFIG.backendUrl is not set — routing cannot proceed.");
+ }
+ return ROUTING_CONFIG.backendUrl + "?startLat=" + startLat + "&startLon=" + startLon +
+ "&endLat=" + endLat + "&endLon=" + endLon;
+}
+(async function(){
+try{
+console.log("Creating Viewer...");
+const viewer = new Cesium.Viewer("cesiumContainer",{
+ globe: false,
+ geocoder: Cesium.IonGeocodeProviderType.GOOGLE,
+ animation:false,
+ timeline:false,
+ baseLayerPicker:false,
+ homeButton:false,
+ sceneModePicker:false,
+ navigationHelpButton:false,
+ fullscreenButton:false,
+ infoBox:false,
+ selectionIndicator:false,
+ shouldAnimate:true
+});
+console.log("Viewer Created");
+// ===================================================================
+// CONFIRMED FIX (video-evidenced): globe: false above means there is no
+// fallback ellipsoid/base imagery layer. On a large geographic camera
+// jump (e.g. Chungthang -> Gangtok), Photorealistic 3D Tiles for the
+// brand-new area haven't loaded yet, and with no fallback layer the
+// scene had NOTHING to draw for that gap — rendering as a near-solid
+// black frame (confirmed on video, ~1s duration, self-resolves as the
+// first coarse tile streams in). This is a rendering-CONTENT gap, not
+// the earlier CPU/main-thread lag — nothing below touches route, OSM,
+// taxi, marker, or height-sampling code.
+// Setting a neutral dark background means that same gap now reads as
+// an intentional "loading" tone instead of looking like a crash. Purely
+// cosmetic — does not change what tiles load, when, or how fast.
+// ===================================================================
+viewer.scene.backgroundColor = Cesium.Color.fromCssColorString("#0d1b2a");
+// ===================================================================
+// GPU/WEBGL PERFORMANCE (verified against bundled Cesium 1.143 source
+// before applying — see delivery notes for what was NOT applied and why):
+//
+// - viewer.shadows: real Cesium.Viewer property (confirmed in source).
+//   Explicitly false — shadow map generation is one of the more
+//   expensive optional Cesium features and this app never enables
+//   dynamic sun shadows, so this just makes that "off" state explicit
+//   rather than relying on the (also-false) default.
+// - viewer.resolutionScale: real Cesium.Viewer property (confirmed in
+//   source — it forwards to the underlying CesiumWidget). On a
+//   high-DPI Android screen (devicePixelRatio 2–3+), Cesium by default
+//   renders at full native pixel density, which is a large, often
+//   invisible-to-the-user GPU cost on WebGL. Capping it here avoids
+//   burning GPU time on detail the screen's own pixel density means
+//   the user can't actually perceive the difference of.
+// - viewer.scene.globe.enableLighting is intentionally NOT set: this
+//   app creates the Viewer with `globe: false` (see above) and uses
+//   Google Photorealistic 3D Tiles instead of Cesium's built-in
+//   ellipsoid globe. viewer.scene.globe is therefore null here, and
+//   setting a property on it would throw. Photorealistic 3D Tiles
+//   already ship pre-lit/pre-baked imagery, so there is no separate
+//   real-time lighting pass to disable for this app's actual rendering
+//   path.
+// ===================================================================
+viewer.shadows = false;
+viewer.resolutionScale = window.devicePixelRatio > 1.5 ? 1.0 : window.devicePixelRatio;
+// ===================================================================
+// PERFORMANCE: by default Cesium renders continuously at full frame
+// rate even when nothing on screen is changing, which is heavy with
+// Photorealistic 3D Tiles on mobile. requestRenderMode makes it only
+// render when something actually changes. The pulsing dot still needs
+// periodic redraws to animate, so a light manual render is triggered
+// a few times per second — far cheaper than uncapped continuous
+// rendering.
+// ===================================================================
+viewer.scene.requestRenderMode = true;
+viewer.scene.maximumRenderTimeChange = Infinity;
+setInterval(function(){
+ viewer.scene.requestRender();
+}, 150);
+// ===================================================================
+// PERFORMANCE DIAGNOSTICS (production-disabled by default). Renders a
+// small on-screen HUD showing FPS, entity/tile counts, and pending
+// network activity so the real remaining bottleneck can be MEASURED
+// on-device instead of guessed at from static code reading. This does
+// NOT monkey-patch fetch/XHR and adds zero overhead when disabled — the
+// whole block is skipped entirely if the flag is false.
+// ===================================================================
+const ENABLE_PERFORMANCE_DIAGNOSTICS = false;
+if (ENABLE_PERFORMANCE_DIAGNOSTICS) {
+ const perfHud = document.createElement("div");
+ perfHud.style.cssText =
+ "position:fixed;top:6px;left:6px;z-index:99999;background:rgba(0,0,0,0.75);" +
+ "color:#0f0;font:11px monospace;padding:6px 8px;border-radius:4px;" +
+ "line-height:1.5;pointer-events:none;white-space:pre;";
+ document.body.appendChild(perfHud);
+ let perfLastFrameTime = performance.now();
+ let perfFrameCount = 0;
+ let perfFps = 0;
+ viewer.scene.postRender.addEventListener(function(){
+ perfFrameCount++;
+ const now = performance.now();
+ const elapsed = now - perfLastFrameTime;
+ if (elapsed >= 1000) {
+ perfFps = Math.round((perfFrameCount * 1000) / elapsed);
+ perfFrameCount = 0;
+ perfLastFrameTime = now;
+ }
+ });
+ setInterval(function(){
+ // photorealisticTileset is only defined after the try block below
+ // resolves; guarded so the HUD works even before/if that fails.
+ const ts = (typeof photorealisticTileset !== "undefined" && photorealisticTileset)
+ ? photorealisticTileset.statistics
+ : null;
+ const lines = [
+ "FPS: " + perfFps,
+ "Entities: " + viewer.entities.values.length,
+ "OSM active: " + (typeof osmActiveEntities !== "undefined" ? osmActiveEntities.size : "n/a"),
+ "OSM cache: " + (typeof osmPlaceCache !== "undefined" ? osmPlaceCache.size : "n/a"),
+ "Camera moving: " + (typeof cameraIsMoving !== "undefined" ? cameraIsMoving : "n/a"),
+ ts ? ("Tiles ready: " + ts.numberOfTilesWithContentReady) : "Tiles ready: n/a",
+ ts ? ("Tile requests pending: " + ts.numberOfPendingRequests) : "Tile pending: n/a",
+ ts ? ("Tile mem: " + (ts.totalMemoryUsageInBytes ? (ts.totalMemoryUsageInBytes / 1048576).toFixed(1) + " MB" : "n/a")) : "Tile mem: n/a"
+ ];
+ perfHud.textContent = lines.join("\n");
+ }, 500);
+ console.log("Performance diagnostics HUD enabled");
+}
+// ===================================================================
+// SEARCH RESULT MARKER
+// Searching previously just flew the camera with no visual
+// confirmation of what was found — unlike Google Maps, which always
+// drops a labeled pin. This listens to the built-in geocoder's result
+// and places a purple "S" pin with the searched name at that spot.
+// ===================================================================
+let searchResultEntity = null;
+function addSearchResultMarker(lat, lon, label){
+ if (searchResultEntity) {
+ viewer.entities.remove(searchResultEntity);
+ }
+ const pinBuilder = new Cesium.PinBuilder();
+ const searchPin = pinBuilder.fromText("S", Cesium.Color.PURPLE, 48);
+ searchResultEntity = viewer.entities.add({
+ position: Cesium.Cartesian3.fromDegrees(lon, lat, 0),
+ billboard: {
+ image: searchPin.toDataURL(),
+ verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+ disableDepthTestDistance: Number.POSITIVE_INFINITY
+ },
+ label: {
+ text: label,
+ font: "13px sans-serif",
+ fillColor: Cesium.Color.WHITE,
+ outlineColor: Cesium.Color.BLACK,
+ outlineWidth: 3,
+ style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+ verticalOrigin: Cesium.VerticalOrigin.TOP,
+ pixelOffset: new Cesium.Cartesian2(0, 5),
+ disableDepthTestDistance: Number.POSITIVE_INFINITY
+ }
+ });
+ refineEntityHeight(searchResultEntity, lat, lon);
+}
+try {
+ if (viewer.geocoder && viewer.geocoder.viewModel) {
+ const destinationObservable = Cesium.knockout.getObservable(viewer.geocoder.viewModel, "destination");
+ if (destinationObservable) {
+ destinationObservable.subscribe(function(destination){
+ if (!Cesium.defined(destination)) { return; }
+ let resultLat, resultLon;
+ if (destination instanceof Cesium.Rectangle) {
+ const center = Cesium.Rectangle.center(destination);
+ resultLat = Cesium.Math.toDegrees(center.latitude);
+ resultLon = Cesium.Math.toDegrees(center.longitude);
+ } else if (destination instanceof Cesium.Cartesian3) {
+ const cartographic = Cesium.Cartographic.fromCartesian(destination);
+ resultLat = Cesium.Math.toDegrees(cartographic.latitude);
+ resultLon = Cesium.Math.toDegrees(cartographic.longitude);
+ } else {
+ return;
+ }
+ addSearchResultMarker(resultLat, resultLon, viewer.geocoder.viewModel.searchText);
+ });
+ console.log("Search result marker hook attached");
+ } else {
+ console.error("Geocoder destination observable not available — search result marker disabled, search itself still works normally");
+ }
+ }
+} catch (geocoderHookError) {
+ console.error("Failed to attach search result marker hook (non-fatal — search itself still works normally)");
+ console.error(geocoderHookError);
+}
+viewer.camera.flyTo({
+ destination: Cesium.Cartesian3.fromDegrees(
+ 88.5122,
+ 27.3389,
+ 15000
+ ),
+ duration:3
+});
+console.log("Camera moved to Sikkim");
+// ===================================================================
+// IMPORTANT: these window functions are defined HERE, immediately
+// after the viewer is created — NOT after the 3D tileset finishes
+// loading below. Flutter calls window.flyToUserLocation as soon as
+// the page finishes loading, which can happen well before the heavy
+// 3D tileset download completes. If these were defined after that
+// await, Flutter's call would arrive too early and silently fail
+// (the function wouldn't exist yet) — that was the original bug.
+// ===================================================================
+let userMarkerEntity = null;
+let lastUserLat = null;
+let lastUserLon = null;
+// Simple, reliable, immediate rendering. disableDepthTestDistance ensures
+// the dot is always visible on top of the 3D tileset regardless of exact
+// height match — reliability matters more than pixel-perfect elevation
+// for a live position indicator.
+// Places/updates the dot immediately at an approximate height (so it's
+// never missing), then quietly refines to the REAL ground elevation in
+// the background once known. Without this, the dot sits at height 0
+// (sea level) while the actual terrain in Sikkim is much higher — since
+// the dot always renders on top (disableDepthTestDistance), that height
+// mismatch makes it appear to slide around as you zoom/pan, instead of
+// staying locked to the real ground position.
+// ===================================================================
+// PERFORMANCE FIX (confirmed root cause #3): window.updateUserMarker
+// (called by Flutter on every live GPS tick) previously called
+// addOrUpdateUserMarker -> refineUserMarkerHeight -> an UNTHROTTLED
+// viewer.scene.sampleHeightMostDetailed() on every single GPS update.
+// That is an async terrain/tileset sample against the Photorealistic
+// 3D Tiles for every GPS fix — with a typical GPS update interval of a
+// few seconds, this adds up to dozens of these expensive queries per
+// minute of active navigation, on top of everything else happening
+// during panning. This did NOT match the "already throttled" claim
+// from the prior investigation notes — it was confirmed unthrottled in
+// the actual code. Now refined at most once every 3 seconds, and only
+// if the user has moved a meaningful distance (>3m) since the last
+// refine — the visible dot still updates its lat/lon immediately every
+// tick, only the expensive terrain-height lookup is throttled.
+// ===================================================================
+const USER_MARKER_HEIGHT_REFINE_MIN_INTERVAL_MS = 3000;
+const USER_MARKER_HEIGHT_REFINE_MIN_DISTANCE_KM = 0.003; // ~3 meters
+let lastUserMarkerHeightRefineTime = 0;
+let lastUserMarkerHeightRefineLat = null;
+let lastUserMarkerHeightRefineLon = null;
+function addOrUpdateUserMarker(lat, lon){
+ lastUserLat = lat;
+ lastUserLon = lon;
+ const approxPosition = Cesium.Cartesian3.fromDegrees(lon, lat, 0);
+ if (userMarkerEntity) {
+ userMarkerEntity.position = approxPosition;
+ } else {
+ userMarkerEntity = viewer.entities.add({
+ position: approxPosition,
+ point: {
+ pixelSize: new Cesium.CallbackProperty(function(time){
+ const seconds = Cesium.JulianDate.secondsDifference(time, viewer.clock.startTime);
+ return 12 + 8 * Math.abs(Math.sin(seconds * 2));
+ }, false),
+ color: Cesium.Color.DODGERBLUE.withAlpha(0.9),
+ outlineColor: Cesium.Color.WHITE,
+ outlineWidth: 2,
+ disableDepthTestDistance: Number.POSITIVE_INFINITY
+ }
+ });
+ }
+ const now = Date.now();
+ const movedFarEnough = (lastUserMarkerHeightRefineLat === null) ||
+ (haversineDistanceKm(lat, lon, lastUserMarkerHeightRefineLat, lastUserMarkerHeightRefineLon) >
+ USER_MARKER_HEIGHT_REFINE_MIN_DISTANCE_KM);
+ const enoughTimePassed = (now - lastUserMarkerHeightRefineTime) > USER_MARKER_HEIGHT_REFINE_MIN_INTERVAL_MS;
+ if (movedFarEnough && enoughTimePassed) {
+ lastUserMarkerHeightRefineTime = now;
+ lastUserMarkerHeightRefineLat = lat;
+ lastUserMarkerHeightRefineLon = lon;
+ refineUserMarkerHeight(lat, lon);
+ }
+}
+function refineUserMarkerHeight(lat, lon){
+ const cartographic = Cesium.Cartographic.fromDegrees(lon, lat);
+ viewer.scene.sampleHeightMostDetailed([cartographic]).then(function(){
+ if (Cesium.defined(cartographic.height) && userMarkerEntity) {
+ userMarkerEntity.position = Cesium.Cartesian3.fromDegrees(lon, lat, cartographic.height);
+ console.log("User marker height refined to:", cartographic.height);
+ }
+ }).catch(function(heightError){
+ console.error("User marker height refine failed (dot still visible at approximate height)");
+ console.error(heightError);
+ });
+}
+// ===================================================================
+// FOLLOW MODE — extends the existing recenter/GPS system. Camera and
+// GPS marker remain separate states; Follow only links them when
+// explicitly enabled, and disables itself the instant the user
+// manually moves the camera (isProgrammaticCameraMove distinguishes
+// our own flyTo calls from real user drag/pinch/rotate input).
+// ===================================================================
+let followModeEnabled = false;
+let isProgrammaticCameraMove = false;
+let lastFollowFlightTime = 0;
+let lastFollowLat = null;
+let lastFollowLon = null;
+viewer.camera.moveStart.addEventListener(function(){
+ if (!isProgrammaticCameraMove && followModeEnabled) {
+ followModeEnabled = false;
+ console.log("FOLLOW: OFF (user took manual camera control)");
+ }
+});
+// Clean CAMERA: state log — throttled naturally by moveEnd (fires once
+// per settled pan/zoom/rotate/tilt, not per-frame, so no console spam).
+viewer.camera.moveEnd.addEventListener(function(){
+ const cam = viewer.camera.positionCartographic;
+ console.log(
+ "CAMERA: lon=" + Cesium.Math.toDegrees(cam.longitude).toFixed(6) +
+ " lat=" + Cesium.Math.toDegrees(cam.latitude).toFixed(6) +
+ " height=" + cam.height.toFixed(1) +
+ " heading=" + Cesium.Math.toDegrees(viewer.camera.heading).toFixed(1) +
+ " pitch=" + Cesium.Math.toDegrees(viewer.camera.pitch).toFixed(1)
+ );
+});
+// ===================================================================
+// PHASE 2 — OSM/OVERPASS PLACE + STREET NAME COVERAGE
+// Bounded to the current visible map area only, throttled, cached in
+// memory per-area, deduplicated, and capped — never bulk-downloads
+// Sikkim/Kalimpong, never fires on every camera move. Non-fatal on
+// failure: the 3D map and every other system keeps working normally.
+// ===================================================================
+// ===================================================================
+// PERFORMANCE FIX (confirmed root causes #5, #6, #7):
+// #5 — each OSM label previously got its own individual, unbatched
+// refineEntityHeight() -> sampleHeightMostDetailed() promise call (up
+// to 60 per viewport fetch). The taxi code already batches its height
+// queries into one call; OSM labels now do the same.
+// #6 — OSM entities were capped at OSM_MAX_LABELS but NEVER evicted.
+// Once the cap filled up (from whichever areas were visited first —
+// Kalimpong, then Sikkim locations, etc.) every later viewport's
+// places silently failed to render, while the earliest entities sat
+// resident (and were still processed every frame by Cesium's label/
+// billboard visualizers) forever, off-screen or not. osmActiveEntities
+// now tracks each entity with its Cesium object and add-order, and
+// when the cap is reached, the OLDEST entities are genuinely removed
+// via viewer.entities.remove() (not just hidden) to make room — a
+// real bounded, rolling window instead of a one-time fill-and-stop.
+// #7 — osmPlaceCache (the raw Overpass response cache, keyed per
+// viewport bbox) had no size limit and grew for as long as the user
+// kept panning to new areas. It's now capped and evicts its oldest
+// entry (insertion-order, so this is O(1) with a plain Map) once full.
+// ===================================================================
+const osmPlaceCache = new Map();
+const OSM_PLACE_CACHE_MAX_ENTRIES = 40;
+const osmAddedKeys = new Set();
+// osmActiveEntities is now the SINGLE source of truth for "OSM places
+// currently resident" — each record carries both the Cesium entity and
+// the original feature data. Search now reads from this map instead of
+// a separate ever-growing array (see fix below), so search results and
+// on-map entities can never drift out of sync, and both are naturally
+// bounded by the same OSM_MAX_LABELS rolling window.
+const osmActiveEntities = new Map(); // dedupeKey -> { entity, addOrder, feature }
+let osmAddOrderCounter = 0;
+let lastOsmFetchTime = 0;
+const OSM_FETCH_THROTTLE_MS = 15000;
+const OSM_MAX_LABELS = 150;
+const OSM_MAX_CAMERA_HEIGHT_M = 20000;
+function evictOldestOsmEntities(countToEvict){
+ // osmActiveEntities preserves insertion order (Map), so the first
+ // entries are always the oldest — cheap O(n) eviction of just the
+ // entries we need, not a full rebuild or a blanket removeAll().
+ let evicted = 0;
+ for (const [dedupeKey, record] of osmActiveEntities) {
+ if (evicted >= countToEvict) { break; }
+ viewer.entities.remove(record.entity);
+ osmActiveEntities.delete(dedupeKey);
+ osmAddedKeys.delete(dedupeKey);
+ evicted++;
+ }
+}
+function maybeFetchOsmPlaces(){
+ const now = Date.now();
+ if (now - lastOsmFetchTime < OSM_FETCH_THROTTLE_MS) { return; }
+ const cam = viewer.camera.positionCartographic;
+ if (cam.height > OSM_MAX_CAMERA_HEIGHT_M) { return; }
+ let rect;
+ try {
+ rect = viewer.camera.computeViewRectangle();
+ } catch (rectError) {
+ rect = null;
+ }
+ if (!rect) { return; }
+ const south = Cesium.Math.toDegrees(rect.south).toFixed(2);
+ const west = Cesium.Math.toDegrees(rect.west).toFixed(2);
+ const north = Cesium.Math.toDegrees(rect.north).toFixed(2);
+ const east = Cesium.Math.toDegrees(rect.east).toFixed(2);
+ const cacheKey = south + "," + west + "," + north + "," + east;
+ if (osmPlaceCache.has(cacheKey)) {
+ renderOsmPlaces(osmPlaceCache.get(cacheKey));
+ return;
+ }
+ lastOsmFetchTime = now;
+ const bbox = south + "," + west + "," + north + "," + east;
+ const query = "[out:json][timeout:20];(node[\"place\"~\"town|village|hamlet|locality|suburb\"](" +
+ bbox + ");way[\"highway\"][\"name\"](" + bbox + "););out center 60;";
+ fetch("https://overpass-api.de/api/interpreter", {
+ method: "POST",
+ body: "data=" + encodeURIComponent(query)
+ }).then(function(response){
+ // CONFIRMED FIX (this pass — matches your exact reported error):
+ // Overpass returns an HTML/XML error page (not JSON) on a 504
+ // Gateway Timeout. The old code called response.json() directly
+ // regardless of status, so the HTML error page's "<?xml ..." or
+ // "<html>" opening tag got fed straight into JSON.parse(), which is
+ // exactly "SyntaxError: Unexpected token '<'" from your console.
+ // Now checked and short-circuited BEFORE parsing.
+ if (!response.ok) {
+ throw new Error("Overpass returned HTTP " + response.status);
+ }
+ return response.json();
+ }).then(function(data){
+ const features = (data.elements || []).map(function(el){
+ const name = el.tags && el.tags.name;
+ const lat = el.lat || (el.center && el.center.lat);
+ const lon = el.lon || (el.center && el.center.lon);
+ if (!name || !lat || !lon) { return null; }
+ return { name: name, lat: lat, lon: lon, isRoad: !!(el.tags && el.tags.highway) };
+ }).filter(function(f){ return f !== null; });
+ if (osmPlaceCache.size >= OSM_PLACE_CACHE_MAX_ENTRIES && !osmPlaceCache.has(cacheKey)) {
+ // Evict the oldest cached viewport response (Map preserves
+ // insertion order) so this in-memory cache stays bounded no
+ // matter how many different areas the user pans across.
+ const oldestKey = osmPlaceCache.keys().next().value;
+ osmPlaceCache.delete(oldestKey);
+ }
+ osmPlaceCache.set(cacheKey, features);
+ renderOsmPlaces(features);
+ }).catch(function(osmError){
+ console.error("OSM Overpass fetch failed (non-fatal, map continues normally)");
+ console.error(osmError);
+ });
+}
+function renderOsmPlaces(features){
+ // First pass: figure out which features are genuinely new (dedupe),
+ // and make room for them by evicting the oldest resident entities if
+ // needed — a real rolling window instead of a one-time fill-and-stop.
+ const toAdd = [];
+ features.forEach(function(f){
+ const dedupeKey = f.name + "_" + f.lat.toFixed(3) + "_" + f.lon.toFixed(3);
+ if (osmAddedKeys.has(dedupeKey)) { return; }
+ toAdd.push({ f: f, dedupeKey: dedupeKey });
+ });
+ if (toAdd.length === 0) { return; }
+ const roomNeeded = (osmAddedKeys.size + toAdd.length) - OSM_MAX_LABELS;
+ if (roomNeeded > 0) {
+ evictOldestOsmEntities(roomNeeded);
+ }
+ // Second pass: add entities (still respecting the cap in case more
+ // arrived in this batch than we can fit even after eviction), then
+ // batch ALL their height lookups into a single sampleHeightMostDetailed
+ // call instead of one promise per entity.
+ const addedEntities = [];
+ const addedCartographics = [];
+ toAdd.forEach(function(item){
+ if (osmAddedKeys.size >= OSM_MAX_LABELS) { return; }
+ const f = item.f;
+ const dedupeKey = item.dedupeKey;
+ osmAddedKeys.add(dedupeKey);
+ const entity = viewer.entities.add({
+ position: Cesium.Cartesian3.fromDegrees(f.lon, f.lat, 0),
+ label: {
+ text: f.name,
+ font: f.isRoad ? "10px sans-serif" : "12px sans-serif",
+ fillColor: f.isRoad ? Cesium.Color.LIGHTYELLOW : Cesium.Color.WHITE,
+ outlineColor: Cesium.Color.BLACK,
+ outlineWidth: 3,
+ style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+ disableDepthTestDistance: Number.POSITIVE_INFINITY,
+ distanceDisplayCondition: f.isRoad
+ ? new Cesium.DistanceDisplayCondition(0.0, 1500.0)
+ : new Cesium.DistanceDisplayCondition(0.0, 12000.0)
+ }
+ });
+ osmActiveEntities.set(dedupeKey, { entity: entity, addOrder: osmAddOrderCounter++, feature: f });
+ addedEntities.push({ entity: entity, lat: f.lat, lon: f.lon });
+ addedCartographics.push(Cesium.Cartographic.fromDegrees(f.lon, f.lat));
+ });
+ if (addedCartographics.length === 0) { return; }
+ viewer.scene.sampleHeightMostDetailed(addedCartographics).then(function(){
+ addedEntities.forEach(function(item, index){
+ const c = addedCartographics[index];
+ if (Cesium.defined(c.height)) {
+ item.entity.position = Cesium.Cartesian3.fromRadians(c.longitude, c.latitude, c.height);
+ }
+ });
+ }).catch(function(heightError){
+ console.error("Batched OSM height refine failed (labels still visible at approximate height)");
+ console.error(heightError);
+ });
+ console.log("OSM: labels tracked =", osmAddedKeys.size);
+}
+viewer.camera.moveEnd.addEventListener(function(){
+ maybeFetchOsmPlaces();
+});
+function followCameraTo(lat, lon){
+ isProgrammaticCameraMove = true;
+ viewer.camera.flyTo({
+ destination: Cesium.Cartesian3.fromDegrees(lon, lat, 15000),
+ duration: 1.5,
+ complete: function(){ isProgrammaticCameraMove = false; },
+ cancel: function(){ isProgrammaticCameraMove = false; }
+ });
+ lastFollowFlightTime = Date.now();
+ lastFollowLat = lat;
+ lastFollowLon = lon;
+}
+window.flyToUserLocation = function(lat, lon){
+ console.log("Flutter sent GPS -> LAT:", lat, "LON:", lon);
+ addOrUpdateUserMarker(lat, lon);
+ viewer.camera.flyTo({
+ destination: Cesium.Cartesian3.fromDegrees(
+ lon,
+ lat,
+ 15000
+ ),
+ duration:3
+ });
+};
+window.updateUserMarker = function(lat, lon){
+ console.log("Live GPS update -> LAT:", lat, "LON:", lon);
+ addOrUpdateUserMarker(lat, lon);
+ if (activeRoute) {
+ trackNavigationProgress(lat, lon);
+ }
+ if (voiceEnabled) {
+ checkHazardProximityVoice(lat, lon);
+ }
+ // Follow Mode: only re-center when actually needed — meaningful
+ // movement (>15m) AND not already mid-flight AND at most once
+ // every 4 seconds, to avoid jitter/fighting the user and avoid
+ // excessive WebView JS calls on every single GPS tick.
+ if (followModeEnabled) {
+ const movedFarEnough = (lastFollowLat === null) ||
+ (haversineDistanceKm(lat, lon, lastFollowLat, lastFollowLon) > 0.015);
+ const enoughTimePassed = (Date.now() - lastFollowFlightTime) > 4000;
+ if (movedFarEnough && enoughTimePassed && !isProgrammaticCameraMove) {
+ followCameraTo(lat, lon);
+ }
+ }
+};
+// ===================================================================
+// STAGE 1 (V2) — VOICE NAVIGATION HELPERS
+// speak(): single gate for all TTS output — only speaks if voice is
+// enabled and the browser's speech engine is available.
+// ===================================================================
+function speak(text){
+ if (!voiceEnabled) { return; }
+ // Android WebView does not implement window.speechSynthesis (a
+ // known, long-standing Chromium/WebView limitation). Instead,
+ // text is sent through the SafeRouteTTS JavaScriptChannel to
+ // Flutter, which speaks it using Android's real native
+ // TextToSpeech engine (see main.dart).
+ if (typeof SafeRouteTTS !== "undefined" && SafeRouteTTS.postMessage) {
+ SafeRouteTTS.postMessage(text);
+ console.log("Voice (native Android TTS):", text);
+ } else {
+ console.error("SafeRouteTTS bridge unavailable — cannot speak. Text was:", text);
+ }
+}
+// Per-hazard "already announced while nearby" state, keyed by a stable
+// hazard identifier (zone name, or "rain-<location>" for rainfall
+// zones). Uses hysteresis (announce radius vs. a larger clear radius)
+// so a warning fires once per approach, not repeatedly while lingering
+// near the edge of a zone.
+let hazardApproachState = {};
+function checkHazardProximityVoice(lat, lon){
+ // Known historical hazard zones (Teesta III GLOF site, Kaw/Lingee-
+ // Payong landslide corridor) — proximity-based, independent of
+ // whether a route is active. Wording is deliberately cautious per
+ // the safety rule: these are HISTORICAL zones, not claims of an
+ // active disaster right now.
+ staticHazardZones.forEach(function(zone){
+ const d = haversineDistanceKm(lat, lon, zone.lat, zone.lon);
+ const announceRadius = zone.radiusKm + 0.5;
+ const clearRadius = zone.radiusKm + 1.5;
+ if (d <= announceRadius) {
+ if (!hazardApproachState[zone.name]) {
+ speak("Warning. You are approaching a known historical hazard zone. " + zone.reason + ".");
+ hazardApproachState[zone.name] = true;
+ }
+ } else if (d > clearRadius) {
+ hazardApproachState[zone.name] = false;
+ }
+ });
+ // Dynamic rainfall-based zones — only announced while that
+ // location is CURRENTLY showing elevated rainfall (live data),
+ // never presented as a permanent/historical hazard.
+ latestWeatherResults.forEach(function(w){
+ if (w.precipitation < RAIN_RISK_THRESHOLD_MM) { return; }
+ const loc = weatherLocations.find(function(l){ return l.name === w.name; });
+ if (!loc) { return; }
+ const d = haversineDistanceKm(lat, lon, loc.lat, loc.lon);
+ const key = "rain-" + w.name;
+ const announceRadius = 5.5;
+ const clearRadius = 7;
+ if (d <= announceRadius) {
+ if (!hazardApproachState[key]) {
+ speak("Caution. Heavy rainfall risk detected near " + w.name + ". Current rainfall is elevated.");
+ hazardApproachState[key] = true;
+ }
+ } else if (d > clearRadius) {
+ hazardApproachState[key] = false;
+ }
+ });
+}
+// ===================================================================
+// V2 NAVIGATION TRACKING — called on every live GPS update while a
+// route is active. Handles: live ETA/remaining-distance, automatic
+// rerouting if the user drifts off the route, and voice announcements
+// of upcoming turns.
+// ===================================================================
+// ===================================================================
+// CONFIRMED ROOT CAUSE (this pass — not TTS): nearestPointOnRoute()
+// previously did coordinates.forEach(...) — a full linear haversine
+// scan over EVERY point in the route, on EVERY GPS tick, for as long
+// as a route is active. Cost scales directly with route length: a
+// short 14-point route is negligible, but a real 90km mountain route
+// (mentioned in your telemetry) can have hundreds to low thousands of
+// points, and this reran in full every single tick, indefinitely.
+// TTS (speak()) is a single lightweight async postMessage() to native
+// Android TTS — not a plausible cause of frame drops on its own. It
+// only APPEARED correlated with lag because both are triggered from
+// this same trackNavigationProgress() call.
+//
+// FIX: since the user moves along the route continuously (not
+// teleporting), the nearest point can only have moved a little since
+// the last tick under normal conditions. Search a bounded window
+// around the last known index instead of the whole array — O(window)
+// instead of O(route length) on every tick. Falls back to a full scan
+// only when there is no previous index to anchor from (first tick of
+// a new route) or if the windowed search comes back implausibly far
+// (e.g. after a reroute), so correctness is preserved.
+// ===================================================================
+let lastNearestRouteIndex = null;
+const NAV_SEARCH_WINDOW = 40; // points ahead/behind — generous vs. realistic GPS-tick movement
+function nearestPointOnRoute(lat, lon, coordinates){
+ let searchStart = 0;
+ let searchEnd = coordinates.length;
+ let windowed = false;
+ if (lastNearestRouteIndex !== null) {
+ searchStart = Math.max(0, lastNearestRouteIndex - NAV_SEARCH_WINDOW);
+ searchEnd = Math.min(coordinates.length, lastNearestRouteIndex + NAV_SEARCH_WINDOW);
+ windowed = true;
+ }
+ let nearestIndex = searchStart;
+ let nearestDistanceKm = Infinity;
+ for (let index = searchStart; index < searchEnd; index++) {
+ const coord = coordinates[index];
+ const d = haversineDistanceKm(lat, lon, coord[1], coord[0]);
+ if (d < nearestDistanceKm) {
+ nearestDistanceKm = d;
+ nearestIndex = index;
+ }
+ }
+ // Safety net: if the windowed search's best match is still
+ // implausibly far away (e.g. the user teleported in a simulator, or
+ // a reroute wasn't caught by the reset above), fall back to a full
+ // scan once rather than silently tracking the wrong point forever.
+ if (windowed && nearestDistanceKm > 0.5) {
+ nearestIndex = 0;
+ nearestDistanceKm = Infinity;
+ coordinates.forEach(function(coord, index){
+ const d = haversineDistanceKm(lat, lon, coord[1], coord[0]);
+ if (d < nearestDistanceKm) {
+ nearestDistanceKm = d;
+ nearestIndex = index;
+ }
+ });
+ }
+ lastNearestRouteIndex = nearestIndex;
+ return { index: nearestIndex, distanceKm: nearestDistanceKm };
+}
+function trackNavigationProgress(lat, lon){
+ const coordinates = activeRoute.coordinates;
+ const nearest = nearestPointOnRoute(lat, lon, coordinates);
+ const REROUTE_THRESHOLD_KM = 0.06; // ~60 meters
+ const now = Date.now();
+ // Auto-reroute: only check every 8s (avoid spamming GraphHopper on
+ // every single GPS tick) and only if clearly off the route.
+ if (nearest.distanceKm > REROUTE_THRESHOLD_KM && (now - lastRerouteCheckTime) > 8000) {
+ lastRerouteCheckTime = now;
+ console.log("Drifted", nearest.distanceKm.toFixed(3), "km from route — recalculating");
+ speak("You are off route. Recalculating.");
+ if (window.__srNavState) { window.__srNavState("rerouting"); }
+ calculateRoute(lat, lon, activeRoute.destLat, activeRoute.destLon);
+ return; // calculateRoute will rebuild activeRoute fresh
+ }
+ // Live ETA: estimate remaining distance/time as a fraction of the
+ // route based on how far along the coordinate list we are.
+ const fractionRemaining = 1 - (nearest.index / Math.max(1, coordinates.length - 1));
+ const remainingKm = ((activeRoute.totalDistanceM / 1000) * fractionRemaining).toFixed(2);
+ const remainingMin = Math.round((activeRoute.totalTimeMs / 60000) * fractionRemaining);
+ const distanceRow = document.querySelector("#routeInfoText .infoRow:nth-child(1) strong");
+ const timeRow = document.querySelector("#routeInfoText .infoRow:nth-child(2) strong");
+ if (distanceRow) { distanceRow.textContent = remainingKm + " km"; }
+ if (timeRow) { timeRow.textContent = remainingMin + " min"; }
+ // Destination approach / arrival — real GraphHopper destination
+ // coordinates, straight-line distance from live position. Each
+ // fires exactly once per route (reset in selectAlternative).
+ const distToDestKm = haversineDistanceKm(lat, lon, activeRoute.destLat, activeRoute.destLon);
+ if (!announcedArrivedDestination && distToDestKm <= 0.03) {
+ speak("You have arrived at your destination.");
+ announcedArrivedDestination = true;
+ if (window.__srNavState) { window.__srNavState("arrived"); }
+ } else if (!announcedApproachingDestination && distToDestKm <= 0.3) {
+ speak("You are approaching your destination.");
+ announcedApproachingDestination = true;
+ }
+ // Voice guidance: announce the next upcoming turn once, when the
+ // user is within ~300m of the point it applies to, including the
+ // approximate distance — using the REAL GraphHopper instruction
+ // text, not invented directions.
+ if (activeRoute.instructions.length > 0) {
+ for (let i = lastSpokenInstructionIndex + 1; i < activeRoute.instructions.length; i++) {
+ const instruction = activeRoute.instructions[i];
+ const pointIndex = instruction.interval ? instruction.interval[0] : null;
+ if (pointIndex === null || pointIndex >= coordinates.length) { continue; }
+ const instructionCoord = coordinates[pointIndex];
+ const distToInstruction = haversineDistanceKm(lat, lon, instructionCoord[1], instructionCoord[0]);
+ if (distToInstruction <= 0.3 && nearest.index <= pointIndex + 3) {
+ const roundedMeters = Math.max(0, Math.round((distToInstruction * 1000) / 50) * 50);
+ const spokenText = roundedMeters >= 50
+ ? ("In " + roundedMeters + " meters, " + instruction.text)
+ : instruction.text;
+ speak(spokenText);
+ lastSpokenInstructionIndex = i;
+ }
+ break; // only ever look at the next upcoming instruction
+ }
+ }
+}
+// "Recenter on My Location" button (like Google Maps). Uses the same
+// lastUserLat/lastUserLon that's already tracked for routing, so no
+// new GPS request is needed — just flies the camera back to the most
+// recently known position. Also (re-)enables Follow Mode, matching
+// the behavior of the recenter button in real navigation apps.
+document.getElementById("recenterButton").addEventListener("click", function(){
+ if (lastUserLat !== null && lastUserLon !== null) {
+ isProgrammaticCameraMove = true;
+ viewer.camera.flyTo({
+ destination: Cesium.Cartesian3.fromDegrees(lastUserLon, lastUserLat, 15000),
+ duration: 2,
+ complete: function(){ isProgrammaticCameraMove = false; },
+ cancel: function(){ isProgrammaticCameraMove = false; }
+ });
+ followModeEnabled = true;
+ lastFollowLat = lastUserLat;
+ lastFollowLon = lastUserLon;
+ lastFollowFlightTime = Date.now();
+ console.log("FOLLOW: ON (recenter pressed)");
+ } else {
+ console.error("No known location yet — cannot recenter");
+ }
+});
+// ===================================================================
+// PHASE 10 — GOVERNMENT INTEGRATION (part 1: emergency helplines)
+// Real, verified official emergency numbers for Sikkim (confirmed via
+// search, current as of this session — 108/102 ambulance service
+// confirmed expanded Aug 2025). Tapping a number uses a real tel:
+// link, intercepted on the Flutter side (main.dart, url_launcher) to
+// open the phone's actual dialer.
+// ===================================================================
+const helplineButton = document.getElementById("helplineButton");
+const helplinePanel = document.getElementById("helplinePanel");
+const helplineSheetClose = document.getElementById("helplineSheetClose");
+function closeAllSheets(){
+ helplinePanel.style.display = "none";
+ permitPanel.style.display = "none";
+ weatherRiskPanel.style.display = "none";
+ if (typeof osmSearchPanel !== "undefined" && osmSearchPanel) { osmSearchPanel.style.display = "none"; }
+}
+helplineButton.addEventListener("click", function(){
+ const isOpen = helplinePanel.style.display === "block";
+ closeAllSheets();
+ helplinePanel.style.display = isOpen ? "none" : "block";
+});
+helplineSheetClose.addEventListener("click", function(){
+ helplinePanel.style.display = "none";
+});
+// ===================================================================
+// PHASE 10 — GOVERNMENT INTEGRATION (part 3: permit / restricted area info)
+// Real, verified current permit requirements for Sikkim's protected
+// tourist areas (Nathula, Tsomgo, North Sikkim, Zuluk, Gurudongmar,
+// Dzongri/Goechala) — confirmed via multiple cross-checked sources.
+// Rules can shift with weather/security, so a link to the official
+// Sikkim Tourism department page is included for current verification.
+// ===================================================================
+const permitButton = document.getElementById("permitButton");
+const permitPanel = document.getElementById("permitPanel");
+const permitSheetClose = document.getElementById("permitSheetClose");
+permitButton.addEventListener("click", function(){
+ const isOpen = permitPanel.style.display === "block";
+ closeAllSheets();
+ permitPanel.style.display = isOpen ? "none" : "block";
+});
+permitSheetClose.addEventListener("click", function(){
+ permitPanel.style.display = "none";
+});
+// ===================================================================
+// OSM SEARCH INTEGRATION — searches the already-fetched osmSearchableFeatures
+// array from Phase 2 (no new Overpass requests here). Reuses the
+// existing sheet toggle pattern, closeAllSheets, and the existing
+// addSearchResultMarker function built for the Cesium geocoder.
+// ===================================================================
+const osmSearchButton = document.getElementById("osmSearchButton");
+const osmSearchPanel = document.getElementById("osmSearchPanel");
+const osmSearchClose = document.getElementById("osmSearchClose");
+const osmSearchInput = document.getElementById("osmSearchInput");
+const osmSearchResults = document.getElementById("osmSearchResults");
+let osmCurrentMatches = [];
+osmSearchButton.addEventListener("click", function(){
+ const isOpen = osmSearchPanel.style.display === "block";
+ closeAllSheets();
+ osmSearchPanel.style.display = isOpen ? "none" : "block";
+});
+osmSearchClose.addEventListener("click", function(){
+ osmSearchPanel.style.display = "none";
+});
+// ===================================================================
+// PERFORMANCE FIX (confirmed root cause — matches "even search becomes
+// unusable" symptom): this handler previously fired on EVERY keystroke
+// with NO debounce, and filtered osmSearchableFeatures — a plain array
+// that was pushed to on every new OSM place discovered and NEVER
+// pruned, even when its on-map entity was evicted. Over a long session
+// covering many areas (Kalimpong, several Sikkim locations, etc.) that
+// array grew without bound, so every keystroke did an ever-more-expensive
+// full linear scan + toLowerCase over a permanently growing list — a
+// direct, concrete mechanism for "search gets harder to use the longer
+// you've been panning around." Search now reads from osmActiveEntities
+// (the same bounded, evicting rolling window the map itself uses), so
+// it can never exceed OSM_MAX_LABELS entries, and the keystroke handler
+// is debounced (150ms) so rapid typing doesn't re-run the scan on every
+// character.
+// ===================================================================
+let osmSearchDebounceHandle = null;
+osmSearchInput.addEventListener("input", function(){
+ if (osmSearchDebounceHandle) { clearTimeout(osmSearchDebounceHandle); }
+ osmSearchDebounceHandle = setTimeout(function(){
+ const q = osmSearchInput.value.trim().toLowerCase();
+ if (q.length < 2) {
+ osmSearchResults.innerHTML = "<div style='font-size:12px;opacity:0.6;'>Type at least 2 characters.</div>";
+ osmCurrentMatches = [];
+ return;
+ }
+ osmCurrentMatches = [];
+ for (const record of osmActiveEntities.values()) {
+ if (record.feature.name.toLowerCase().indexOf(q) !== -1) {
+ osmCurrentMatches.push(record.feature);
+ if (osmCurrentMatches.length >= 8) { break; }
+ }
+ }
+ if (osmCurrentMatches.length === 0) {
+ osmSearchResults.innerHTML =
+ "<div style='font-size:12px;opacity:0.7;line-height:1.4;'>No matches in areas discovered so far. Pan/zoom the map near your destination first, then search again.</div>";
+ return;
+ }
+ osmSearchResults.innerHTML = osmCurrentMatches.map(function(f, i){
+ return "<div class='helplineRow' style='cursor:pointer;' onclick='window.__flyToOsmResult(" + i + ")'>" +
+ "<span class='helplineName'>" + f.name + (f.isRoad ? " (road)" : "") + "</span></div>";
+ }).join("");
+ }, 150);
+});
+window.__flyToOsmResult = function(index){
+ const f = osmCurrentMatches[index];
+ if (!f) { return; }
+ osmSearchPanel.style.display = "none";
+ isProgrammaticCameraMove = true;
+ viewer.camera.flyTo({
+ destination: Cesium.Cartesian3.fromDegrees(f.lon, f.lat, 3000),
+ duration: 2,
+ complete: function(){ isProgrammaticCameraMove = false; },
+ cancel: function(){ isProgrammaticCameraMove = false; }
+ });
+ addSearchResultMarker(f.lat, f.lon, f.name);
+};
+// GOOGLE PHOTOREALISTIC 3D TILES
+// Real mesh-based 3D geometry (buildings, terrain shape) — the same
+// underlying data Google Earth itself uses. Per Google/Cesium's own
+// guidance, the flat globe (imagery + terrain) is disabled above
+// (globe: false) since this tileset fully replaces it as the ground
+// surface. baseLayerPicker and sceneModePicker are disabled since
+// they only apply to the flat globe, not this tileset.
+// This loads AFTER the marker functions above are already defined,
+// so Flutter's early GPS call is never blocked by this.
+// ===================================================================
+const loadingOverlay = document.getElementById("loadingOverlay");
+const loadingText = document.getElementById("loadingText");
+loadingText.textContent = "Loading 3D buildings and terrain...";
+// ===================================================================
+// PERFORMANCE FIX (confirmed root cause #1): Cesium.createGooglePhotorealistic3DTileset()
+// defaults to cacheBytes = 1.5GB and maximumCacheOverflowBytes = 1GB when
+// not explicitly set (confirmed by inspecting the bundled Cesium 1.143
+// source — these are NOT the generic Cesium3DTileset defaults of 512MB,
+// they are specifically higher for the photorealistic helper). That is a
+// ~2.5GB tile-memory budget the tileset is allowed to grow into before
+// the LRU cache starts aggressively evicting — completely unreasonable
+// for an Android WebView. As the user pans across Kalimpong, multiple
+// Sikkim locations, etc., tile memory climbs toward that huge ceiling,
+// which lines up exactly with "fine for the first 1-2 minutes, then
+// progressively worse." Setting an explicit, much smaller mobile-sized
+// budget is the single highest-leverage fix confirmed in this pass.
+// maximumScreenSpaceError is also raised from the default of 16 to 32 —
+// a real, supported Cesium3DTileset property (confirmed present in the
+// bundled Cesium 1.143 source) — trading a bit of visual detail for far
+// fewer/lighter tiles in memory and on the GPU at any one time.
+// ===================================================================
+const MOBILE_TILE_CACHE_BYTES = 220 * 1024 * 1024; // 220MB active budget
+const MOBILE_TILE_CACHE_OVERFLOW_BYTES = 80 * 1024 * 1024; // 80MB burst allowance
+const MOBILE_MAX_SCREEN_SPACE_ERROR = 32;
+// Set to true only for temporary investigation — this reproduces the
+// per-network-request diagnostic wrapper that was left enabled in the
+// code inspected during this pass. With it OFF (the default), every
+// tile.googleapis.com request skips the extra camera-position lookup,
+// string parsing, and console logging that was previously running on
+// EVERY tile fetch — a cost that scales directly with how much the user
+// has panned, and a second confirmed contributor to the progressive lag.
+const ENABLE_NETWORK_DIAGNOSTICS = false;
+try {
+ const photorealisticTileset = await Cesium.createGooglePhotorealistic3DTileset({
+ preloadFlightDestinations: true,
+ cacheBytes: MOBILE_TILE_CACHE_BYTES,
+ maximumCacheOverflowBytes: MOBILE_TILE_CACHE_OVERFLOW_BYTES,
+ // preloadAncestors: verified default is already TRUE in Cesium 1.143
+ // (confirmed in the bundled source) — set explicitly here only for
+ // documentation clarity, not because the default was wrong. This is
+ // what lets a lower-detail parent tile stay available as a fallback
+ // while a higher-detail child streams in, avoiding a blank gap.
+ preloadAncestors: true
+ // preloadSiblings deliberately NOT enabled (verified default is
+ // FALSE in Cesium 1.143). Turning it on makes the tileset proactively
+ // request tiles for adjacent-but-not-yet-visible areas at the same
+ // level — genuinely smoother if you then pan that direction, but it
+ // directly works against the MOBILE_TILE_CACHE_BYTES budget above by
+ // spending that budget on tiles the camera hasn't asked for yet. That
+ // trade-off (smoother incidental panning vs. a larger working memory
+ // footprint) is a real product decision, not a bug — left off by
+ // default for the mobile memory budget this app is tuned for. Flip it
+ // on here if device profiling shows headroom for it.
+ });
+ photorealisticTileset.maximumScreenSpaceError = MOBILE_MAX_SCREEN_SPACE_ERROR;
+ // ===================================================================
+ // REQUEST-SCHEDULING TUNING (classification B: properties confirmed to
+ // exist and have the stated defaults by reading the bundled Cesium
+ // 1.143 source directly — not assumed). createGooglePhotorealistic3DTileset
+ // already defaults cullRequestsWhileMoving=true, dynamicScreenSpaceError=true,
+ // and foveatedScreenSpaceError=true, which are all correct and are left
+ // alone here rather than "randomly re-tuned" per the request not to
+ // guess at values. The one deliberate change: cullRequestsWhileMovingMultiplier
+ // defaults to 60, which is Cesium's general-purpose default and is not
+ // tuned for a bandwidth/GPU-constrained mobile WebView specifically.
+ // Lowering it makes the tileset more willing to skip/deprioritize
+ // requesting tiles that are unlikely to still be on-screen once the
+ // camera settles during continuous panning — directly implementing
+ // "camera-movement backpressure" rather than requesting every tile the
+ // camera sweeps past. This value is a reasoned mobile-appropriate
+ // choice, not a blind guess, but its real-world effect has NOT been
+ // measured on-device (classification D — needs real Android profiling).
+ // ===================================================================
+ photorealisticTileset.cullRequestsWhileMovingMultiplier = 30;
+ viewer.scene.primitives.add(photorealisticTileset);
+ console.log("Google Photorealistic 3D Tiles loaded (mobile cache budget + request backpressure applied)");
+ // ===================================================================
+ // CAMERA-MOTION ADAPTIVE QUALITY (classification: reasoned engineering
+ // choice using confirmed-real Cesium 1.143 properties — cullRequestsWhileMoving
+ // and maximumScreenSpaceError were both confirmed present in the bundled
+ // Cesium source; this is not an invented API). This directly implements
+ // the "prioritize responsiveness while moving, refine when idle" request:
+ // while the camera is actively panning/zooming/rotating, screen-space
+ // error is temporarily relaxed (coarser detail is considered acceptable,
+ // so fewer/lighter tiles are requested and less GPU work is done per
+ // frame). The instant the camera settles, the normal mobile detail
+ // level is restored and Cesium's own progressive tile refinement fills
+ // in higher detail — existing visible tiles are never destroyed or
+ // forced to unload by this change, so there is no blank-flash or
+ // content-disappearing risk; it only affects what NEW tile requests
+ // are considered "detailed enough."
+ // ===================================================================
+ const SSE_IDLE = MOBILE_MAX_SCREEN_SPACE_ERROR; // 32 — normal mobile quality
+ const SSE_MOVING = 56; // coarser while actively moving
+ let cameraIsMoving = false;
+ viewer.camera.moveStart.addEventListener(function(){
+ if (!cameraIsMoving) {
+ cameraIsMoving = true;
+ photorealisticTileset.maximumScreenSpaceError = SSE_MOVING;
+ }
+ });
+ viewer.camera.moveEnd.addEventListener(function(){
+ cameraIsMoving = false;
+ photorealisticTileset.maximumScreenSpaceError = SSE_IDLE;
+ });
+ // ===================================================================
+ // TILE MEMORY TRIM ON MANUAL PAN (confirmed gap: trimLoadedTiles() is a
+ // real Cesium3DTileset method — confirmed present in the bundled
+ // Cesium 1.143 source — but nothing in the previously inspected code
+ // ever called it, on flyTo or otherwise). Cesium's LRU cache only
+ // evicts once totalMemoryUsageInBytes exceeds cacheBytes, and even then
+ // only unloads tiles that are not currently needed for the visible
+ // view. During long manual pan/zoom/drag sessions across many
+ // viewports, calling trimLoadedTiles() after the camera settles forces
+ // the cache to reconsider eviction against the current (smaller,
+ // mobile-sized) budget instead of letting stale tiles from earlier
+ // viewports linger. Debounced to fire only ~1s after motion stops, so
+ // it never runs on every frame during active dragging.
+ // ===================================================================
+ let tileTrimDebounceHandle = null;
+ viewer.camera.moveEnd.addEventListener(function(){
+ if (tileTrimDebounceHandle) { clearTimeout(tileTrimDebounceHandle); }
+ tileTrimDebounceHandle = setTimeout(function(){
+ photorealisticTileset.trimLoadedTiles();
+ }, 1000);
+ });
+ // ===================================================================
+ // DIAGNOSTIC LOGGING ONLY — approved for investigation of the
+ // repeated-flight rendering glitch. This block does NOT change any
+ // rendering, cache, camera, quality, geocoder, or render-mode
+ // behavior. Every line here is either console.log or console.error.
+ // Gated behind ENABLE_NETWORK_DIAGNOSTICS (see above) — OFF by default
+ // now that the real root causes have been confirmed and fixed.
+ // ===================================================================
+ // This whole diagnostic block (motion counters, tileUnload/tileFailed
+ // listeners, and the fetch/XHR wrappers below) now only installs when
+ // ENABLE_NETWORK_DIAGNOSTICS is true. Previously these ran unconditionally
+ // on every camera moveEnd and every tile request — real, confirmed
+ // per-interaction overhead that scaled with how much panning/zooming
+ // the user had done, which is exactly the "gets laggier over time"
+ // symptom reported.
+ // ===================================================================
+ let diagnosticMotionCounter = 0;
+ if (ENABLE_NETWORK_DIAGNOSTICS) {
+ let diagnosticUnloadCount = 0;
+ photorealisticTileset.tileUnload.addEventListener(function(){
+ diagnosticUnloadCount++;
+ });
+ viewer.camera.moveStart.addEventListener(function(){
+ diagnosticMotionCounter++;
+ const label = diagnosticMotionCounter === 1
+ ? "FIRST FLIGHT/MOTION"
+ : "REPEAT FLIGHT/MOTION #" + diagnosticMotionCounter;
+ console.log("DIAGNOSTIC: === " + label + " STARTED ===");
+ });
+ viewer.camera.moveEnd.addEventListener(function(){
+ const stats = photorealisticTileset.statistics;
+ const label = diagnosticMotionCounter === 1
+ ? "FIRST FLIGHT/MOTION"
+ : "REPEAT FLIGHT/MOTION #" + diagnosticMotionCounter;
+ console.log(
+ "DIAGNOSTIC: === " + label + " ENDED === pending=" + stats.numberOfPendingRequests +
+ " processing=" + stats.numberOfTilesProcessing +
+ " readyTiles=" + stats.numberOfTilesWithContentReady +
+ " unloadedTotal=" + diagnosticUnloadCount
+ );
+ const cam = viewer.camera.positionCartographic;
+ console.log(
+ "DIAGNOSTIC POSITION [motion #" + diagnosticMotionCounter + "] lon=" +
+ Cesium.Math.toDegrees(cam.longitude).toFixed(6) + " lat=" +
+ Cesium.Math.toDegrees(cam.latitude).toFixed(6) + " height=" + cam.height.toFixed(1)
+ );
+ });
+ let diagnosticFailedTotal = 0;
+ photorealisticTileset.tileFailed.addEventListener(function(error){
+ diagnosticFailedTotal++;
+ const cam = viewer.camera.positionCartographic;
+ console.error(
+ "DIAGNOSTIC: TILE FAILED during motion #" + diagnosticMotionCounter +
+ " failedTotal=" + diagnosticFailedTotal +
+ " url=" + error.url + " message=" + error.message +
+ " camLon=" + Cesium.Math.toDegrees(cam.longitude).toFixed(6) +
+ " camLat=" + Cesium.Math.toDegrees(cam.latitude).toFixed(6) +
+ " camHeight=" + cam.height.toFixed(1)
+ );
+ });
+ }
+ // ===================================================================
+ // DIAGNOSTIC FETCH WRAPPER — distinguishes:
+ // - CESIUM_CANCELLED: promise rejected with error.name === "AbortError"
+ // (Cesium's own RequestScheduler cancelling a stale request)
+ // - NETWORK_FAILURE: promise rejected with any other error
+ // - HTTP_ERROR: promise resolved, but response.ok is false (a real
+ // HTTP status from Google we've never been able to see before)
+ // - SUCCESS: promise resolved with response.ok true
+ // This is a transparent proxy only — always calls through to the
+ // real fetch and returns/re-throws its exact result unmodified, so
+ // it cannot alter tile loading behavior. Only tile.googleapis.com
+ // requests are logged; everything else passes through silently.
+ // CONFIRMED COST: with Photorealistic 3D Tiles, tile.googleapis.com
+ // requests can number in the hundreds during a few minutes of active
+ // panning across viewports. Every one of those requests was paying
+ // for a camera-position lookup, string parsing, and a console.log —
+ // work that scales with exactly how much the user has moved around,
+ // matching the reported "gets laggier the more you use it" symptom.
+ // Now skipped entirely unless ENABLE_NETWORK_DIAGNOSTICS is turned on.
+ // ===================================================================
+ if (!ENABLE_NETWORK_DIAGNOSTICS) {
+ // no-op: skip installing the fetch/XHR wrappers below entirely
+ } else {
+ const diagnosticOriginalFetch = window.fetch;
+ window.fetch = function(input, init){
+ const requestUrl = typeof input === "string" ? input : ((input && input.url) || "");
+ if (requestUrl.indexOf("tile.googleapis.com") === -1) {
+ return diagnosticOriginalFetch.apply(this, arguments);
+ }
+ const startTime = performance.now();
+ const motionAtStart = diagnosticMotionCounter;
+ let camLon = "N/A", camLat = "N/A", camHeight = "N/A";
+ try {
+ const cam = viewer.camera.positionCartographic;
+ camLon = Cesium.Math.toDegrees(cam.longitude).toFixed(6);
+ camLat = Cesium.Math.toDegrees(cam.latitude).toFixed(6);
+ camHeight = cam.height.toFixed(1);
+ } catch (camErr) { /* camera not ready yet, leave as N/A */ }
+ const shortUrl = requestUrl.substring(
+ requestUrl.lastIndexOf("/") + 1,
+ requestUrl.indexOf("?") > -1 ? requestUrl.indexOf("?") : requestUrl.length
+ );
+ return diagnosticOriginalFetch.apply(this, arguments).then(function(response){
+ const durationMs = (performance.now() - startTime).toFixed(0);
+ console.log(
+ "DIAGNOSTIC FETCH " + (response.ok ? "SUCCESS" : "HTTP_ERROR") +
+ " status=" + response.status +
+ " durationMs=" + durationMs +
+ " motion=" + motionAtStart +
+ " camLon=" + camLon + " camLat=" + camLat + " camHeight=" + camHeight +
+ " url=" + shortUrl
+ );
+ return response;
+ }).catch(function(fetchError){
+ const durationMs = (performance.now() - startTime).toFixed(0);
+ const wasCancelled = fetchError && fetchError.name === "AbortError";
+ console.error(
+ "DIAGNOSTIC FETCH " + (wasCancelled ? "CESIUM_CANCELLED" : "NETWORK_FAILURE") +
+ " errorName=" + (fetchError && fetchError.name) +
+ " errorMessage=" + (fetchError && fetchError.message) +
+ " durationMs=" + durationMs +
+ " motion=" + motionAtStart +
+ " camLon=" + camLon + " camLat=" + camLat + " camHeight=" + camHeight +
+ " url=" + shortUrl
+ );
+ throw fetchError;
+ });
+ };
+ // ===================================================================
+ // DIAGNOSTIC XHR WRAPPER — Phase 2. Determines whether tile requests
+ // use XMLHttpRequest instead of fetch (Phase 1 found zero "DIAGNOSTIC
+ // FETCH" log lines, meaning fetch is NOT the mechanism in use).
+ // Transparent proxy only: always calls through to the real open/send,
+ // only attaches listeners for logging, never alters request behavior.
+ // Only tile.googleapis.com requests are logged.
+ // ===================================================================
+ const diagnosticOriginalXHROpen = XMLHttpRequest.prototype.open;
+ const diagnosticOriginalXHRSend = XMLHttpRequest.prototype.send;
+ XMLHttpRequest.prototype.open = function(method, url){
+ this.__diagnosticUrl = url;
+ this.__diagnosticIsTileRequest = typeof url === "string" && url.indexOf("tile.googleapis.com") !== -1;
+ return diagnosticOriginalXHROpen.apply(this, arguments);
+ };
+ XMLHttpRequest.prototype.send = function(){
+ if (!this.__diagnosticIsTileRequest) {
+ return diagnosticOriginalXHRSend.apply(this, arguments);
+ }
+ const xhr = this;
+ const startTime = performance.now();
+ const motionAtStart = diagnosticMotionCounter;
+ let camLon = "N/A", camLat = "N/A", camHeight = "N/A";
+ try {
+ const cam = viewer.camera.positionCartographic;
+ camLon = Cesium.Math.toDegrees(cam.longitude).toFixed(6);
+ camLat = Cesium.Math.toDegrees(cam.latitude).toFixed(6);
+ camHeight = cam.height.toFixed(1);
+ } catch (camErr) { /* camera not ready yet, leave as N/A */ }
+ const rawUrl = xhr.__diagnosticUrl;
+ const shortUrl = rawUrl.substring(
+ rawUrl.lastIndexOf("/") + 1,
+ rawUrl.indexOf("?") > -1 ? rawUrl.indexOf("?") : rawUrl.length
+ );
+ console.log(
+ "DIAGNOSTIC XHR START motion=" + motionAtStart +
+ " camLon=" + camLon + " camLat=" + camLat + " camHeight=" + camHeight +
+ " url=" + shortUrl
+ );
+ xhr.addEventListener("load", function(){
+ const durationMs = (performance.now() - startTime).toFixed(0);
+ const ok = xhr.status >= 200 && xhr.status < 300;
+ console.log(
+ "DIAGNOSTIC XHR " + (ok ? "LOAD" : "HTTP_ERROR") +
+ " status=" + xhr.status + " durationMs=" + durationMs +
+ " motion=" + motionAtStart + " url=" + shortUrl
+ );
+ });
+ xhr.addEventListener("error", function(){
+ const durationMs = (performance.now() - startTime).toFixed(0);
+ console.error(
+ "DIAGNOSTIC XHR ERROR durationMs=" + durationMs +
+ " motion=" + motionAtStart + " url=" + shortUrl
+ );
+ });
+ xhr.addEventListener("abort", function(){
+ const durationMs = (performance.now() - startTime).toFixed(0);
+ console.error(
+ "DIAGNOSTIC XHR ABORT durationMs=" + durationMs +
+ " motion=" + motionAtStart + " url=" + shortUrl
+ );
+ });
+ xhr.addEventListener("timeout", function(){
+ const durationMs = (performance.now() - startTime).toFixed(0);
+ console.error(
+ "DIAGNOSTIC XHR TIMEOUT durationMs=" + durationMs +
+ " motion=" + motionAtStart + " url=" + shortUrl
+ );
+ });
+ return diagnosticOriginalXHRSend.apply(this, arguments);
+ };
+ setInterval(function(){
+ const stats = photorealisticTileset.statistics;
+ console.log(
+ "DIAGNOSTIC STATS [motion #" + diagnosticMotionCounter + "] " +
+ "pending=" + stats.numberOfPendingRequests +
+ " readyTiles=" + stats.numberOfTilesWithContentReady
+ );
+ }, 1000);
+ } // end ENABLE_NETWORK_DIAGNOSTICS gate (fetch/XHR wrappers + per-second stats log)
+} catch (tilesetError) {
+ console.error("PHOTOREALISTIC TILES FAILED TO LOAD");
+ console.error(tilesetError);
+}
+loadingOverlay.style.display = "none";
+// ===================================================================
+// SIKKIM SAFETY RESOURCE DATA — all 4 districts
+// East (Gangtok), South (Namchi), West (Gyalshing), North (Mangan)
+// Sourced from Google Places, verified real locations, July 2026.
+// Dam markers are STATIC REFERENCE POINTS only — this is NOT live
+// flood/landslide monitoring. That is a separate future roadmap
+// phase requiring live sensor/gauge data feeds.
+// ===================================================================
+const resourceData = [
+ // ---- EAST DISTRICT (Gangtok) — Hospitals ----
+ { name: "Central Referral Hospital", type: "hospital", district: "East", lat: 27.3162391, lon: 88.5972587 },
+ { name: "STNM Hospital", type: "hospital", district: "East", lat: 27.3449449, lon: 88.6038244 },
+ { name: "District Hospital Singtam", type: "hospital", district: "East", lat: 27.2296952, lon: 88.4946887 },
+ // ---- EAST DISTRICT (Gangtok) — Police ----
+ { name: "Sadar Police Station", type: "police", district: "East", lat: 27.333706, lon: 88.6150315 },
+ { name: "Sikkim Police Headquarters", type: "police", district: "East", lat: 27.3301671, lon: 88.6119303 },
+ { name: "Tadong Police Station", type: "police", district: "East", lat: 27.3144007, lon: 88.6010724 },
+ { name: "Ranipool Police Station", type: "police", district: "East", lat: 27.2936311, lon: 88.5908099 },
+ // ---- SOUTH DISTRICT (Namchi) — Hospitals ----
+ { name: "District Hospital Namchi", type: "hospital", district: "South", lat: 27.1613101, lon: 88.3581313 },
+ // ---- SOUTH DISTRICT (Namchi) — Police ----
+ { name: "Namchi Police Station", type: "police", district: "South", lat: 27.1647289, lon: 88.3603093 },
+ // ---- WEST DISTRICT (Gyalshing/Geyzing) — Hospitals ----
+ { name: "District Hospital Gyalshing", type: "hospital", district: "West", lat: 27.2911331, lon: 88.2568793 },
+ // ---- WEST DISTRICT (Gyalshing/Geyzing) — Police ----
+ { name: "Police Station Geyzing", type: "police", district: "West", lat: 27.2881708, lon: 88.2574613 },
+ // ---- NORTH DISTRICT (Mangan) — Hospitals ----
+ { name: "Mangan District Hospital", type: "hospital", district: "North", lat: 27.4908521, lon: 88.5318815 },
+ // ---- NORTH DISTRICT (Mangan) — Police ----
+ { name: "Mangan Police Station", type: "police", district: "North", lat: 27.5025105, lon: 88.5359942 },
+ // ---- DAMS / HYDRO PROJECTS (reference points only, Teesta river) ----
+ { name: "Teesta V Dam", type: "dam", district: "East", lat: 27.3869525, lon: 88.5036135 },
+ { name: "Teesta III Dam (DESTROYED — Oct 2023 GLOF)", type: "dam", district: "North", lat: 27.5280130, lon: 88.5411727 },
+ { name: "Teesta VI Hydroelectric Project", type: "dam", district: "East", lat: 27.1858348, lon: 88.5040573 },
+ { name: "Teesta Power Station V", type: "dam", district: "East", lat: 27.2513724, lon: 88.4595430 }
+];
+// Simple, reliable, immediate rendering — same reasoning as the user marker.
+// Shared helper: after placing any entity at approximate height 0,
+// quietly correct it to the REAL ground elevation in the background.
+// Same fix as the user marker — prevents pins/labels from appearing to
+// float or shift position as the camera zooms/pans over 3D terrain.
+function refineEntityHeight(entity, lat, lon){
+ const cartographic = Cesium.Cartographic.fromDegrees(lon, lat);
+ viewer.scene.sampleHeightMostDetailed([cartographic]).then(function(){
+ if (Cesium.defined(cartographic.height)) {
+ entity.position = Cesium.Cartesian3.fromDegrees(lon, lat, cartographic.height);
+ }
+ }).catch(function(heightError){
+ console.error("Height refine failed for entity (still visible at approximate height)");
+ console.error(heightError);
+ });
+}
+// ===================================================================
+// PHASE 6 — NAVIGATION (tap-to-route)
+// Tap anywhere on the map -> green flag marks that spot as the
+// destination -> GraphHopper calculates a real road route from the
+// user's current live GPS position -> route is drawn as a line,
+// height-corrected to sit properly on the real 3D terrain.
+// ===================================================================
+let destinationEntity = null;
+let routeEntity = null;
+const routeInfoPanel = document.getElementById("routeInfoPanel");
+const routeInfoText = document.getElementById("routeInfoText");
+const clearRouteButton = document.getElementById("clearRouteButton");
+// ===================================================================
+// PHASE 9 — RULE-BASED ROUTE RISK ANALYSIS
+// No paid AI API used — this checks a calculated route against known
+// real hazard zones (verified via search/places tools, not guessed):
+// 1. The 2023 Teesta III dam failure site (permanent hazard)
+// 2. The Kaw / Lingee-Payong landslide corridor from the June 2026
+// Sikkim floods/landslides (permanent-for-now hazard, real coords)
+// 3. Any location CURRENTLY showing elevated rainfall (dynamic, pulled
+// from the Phase 8 weather panel data)
+// If a route passes within a zone's radius, a warning is shown in the
+// route info panel alongside the distance/time.
+// ===================================================================
+const staticHazardZones = [
+ {
+ name: "2023 Teesta III Dam Failure Zone",
+ lat: 27.5280130, lon: 88.5411727, radiusKm: 3,
+ reason: "Passes near the site of the October 2023 Teesta III dam failure (GLOF-affected zone)"
+ },
+ {
+ name: "Kaw / Lingee-Payong Landslide Corridor",
+ lat: 27.369, lon: 88.4425, radiusKm: 4,
+ reason: "Passes through an area with recent landslide/road damage activity (June 2026 Sikkim floods)"
+ }
+];
+let latestWeatherResults = [];
+function haversineDistanceKm(lat1, lon1, lat2, lon2){
+ const R = 6371;
+ const dLat = (lat2 - lat1) * Math.PI / 180;
+ const dLon = (lon2 - lon1) * Math.PI / 180;
+ const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+ Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+ Math.sin(dLon / 2) * Math.sin(dLon / 2);
+ const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+ return R * c;
+}
+function checkRouteRisk(coordinates){
+ const risks = [];
+ const activeZones = staticHazardZones.slice();
+ latestWeatherResults.forEach(function(w){
+ if (w.precipitation >= RAIN_RISK_THRESHOLD_MM) {
+ const loc = weatherLocations.find(function(l){ return l.name === w.name; });
+ if (loc) {
+ activeZones.push({
+ name: w.name + " Heavy Rainfall Zone",
+ lat: loc.lat, lon: loc.lon, radiusKm: 5,
+ reason: "Passes near " + w.name + ", currently experiencing heavy rainfall (" + w.precipitation.toFixed(1) + " mm/hr)"
+ });
+ }
+ }
+ });
+ // CONFIRMED secondary cost (this pass): previously scanned the FULL
+ // route coordinate array per hazard zone, called once per route
+ // alternative — for a long route × several zones × 2-3 alternatives,
+ // this adds thousands of haversine calls on every route calculation,
+ // including every auto-reroute. A hazard radius check doesn't need
+ // per-meter precision (zones are km-scale), so the same bounded
+ // sampling used for route height above is reused here.
+ const riskCheckIndices = buildRouteHeightSampleIndices(coordinates.length);
+ activeZones.forEach(function(zone){
+ let minDistance = Infinity;
+ riskCheckIndices.forEach(function(i){
+ const coord = coordinates[i];
+ const d = haversineDistanceKm(zone.lat, zone.lon, coord[1], coord[0]);
+ if (d < minDistance) { minDistance = d; }
+ });
+ if (minDistance <= zone.radiusKm) {
+ risks.push({ reason: zone.reason, distanceKm: minDistance.toFixed(1) });
+ }
+ });
+ return risks;
+}
+function clearRoute(){
+ if (destinationEntity) {
+ viewer.entities.remove(destinationEntity);
+ destinationEntity = null;
+ }
+ if (routeEntity) {
+ viewer.entities.remove(routeEntity);
+ routeEntity = null;
+ }
+ if (typeof alternateRouteEntities !== "undefined") {
+ alternateRouteEntities.forEach(function(e){ viewer.entities.remove(e); });
+ alternateRouteEntities = [];
+ }
+ routeInfoPanel.style.display = "none";
+ routeAlternatives = [];
+ activeRoute = null;
+ lastSpokenInstructionIndex = -1;
+ announcedApproachingDestination = false;
+ announcedArrivedDestination = false;
+ if (window.speechSynthesis) {
+ window.speechSynthesis.cancel();
+ }
+ console.log("Route cleared");
+}
+clearRouteButton.addEventListener("click", function(){
+ clearRoute();
+});
+function setDestination(lat, lon){
+ const position = Cesium.Cartesian3.fromDegrees(lon, lat, 0);
+ if (destinationEntity) {
+ viewer.entities.remove(destinationEntity);
+ }
+ const pinBuilder = new Cesium.PinBuilder();
+ const flagPin = pinBuilder.fromText("●", Cesium.Color.fromCssColorString("#EF4444"), 34);
+ destinationEntity = viewer.entities.add({
+ position: position,
+ billboard: {
+ image: flagPin.toDataURL(),
+ verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+ scale: 0.9,
+ disableDepthTestDistance: Number.POSITIVE_INFINITY
+ }
+ });
+ refineEntityHeight(destinationEntity, lat, lon);
+ console.log("Destination set -> LAT:", lat, "LON:", lon);
+ if (lastUserLat !== null && lastUserLon !== null) {
+ calculateRoute(lastUserLat, lastUserLon, lat, lon);
+ } else {
+ console.error("No known GPS position yet — cannot calculate route until location is available");
+ }
+}
+// ===================================================================
+// V2 — ROUTE ALTERNATIVES, LIVE ETA, AUTO-REROUTE, VOICE NAVIGATION
+// activeRoute holds everything about the currently-followed route so
+// live GPS updates (auto-reroute, ETA, voice) can reference it.
+// ===================================================================
+let routeAlternatives = [];
+let selectedAlternativeIndex = 0;
+let activeRoute = null; // { coordinates, instructions, totalDistanceM, totalTimeMs, destLat, destLon, risks }
+let voiceEnabled = false;
+let lastSpokenInstructionIndex = -1;
+let lastRerouteCheckTime = 0;
+let announcedApproachingDestination = false;
+let announcedArrivedDestination = false;
+let routeRequestId = 0;
+let inFlightRouteKey = null; // prevents an identical duplicate route request while one is pending
+function calculateRoute(startLat, startLon, endLat, endLon){
+ const routeKey = startLat.toFixed(5) + "," + startLon.toFixed(5) + "->" +
+ endLat.toFixed(5) + "," + endLon.toFixed(5);
+ if (routeKey === inFlightRouteKey) {
+ console.log("Duplicate route request for same start/end already in flight — skipping");
+ return;
+ }
+ inFlightRouteKey = routeKey;
+ const thisRequestId = ++routeRequestId;
+ const url = buildRouteUrl(startLat, startLon, endLat, endLon);
+ console.log("Requesting route (with alternatives) from GraphHopper... id=" + thisRequestId);
+ // CONFIRMED FIX (this pass): no AbortController/timeout existed here
+ // previously — a route request that never resolves (dead network,
+ // hung TCP connection, backend unreachable) would sit forever with
+ // no failure ever surfacing, leaving inFlightRouteKey permanently set
+ // and silently blocking all future route requests to that same
+ // start/end pair. 12s gives real GraphHopper responses (including
+ // the free-tier's occasional slow response) room to complete while
+ // still surfacing a clear error instead of hanging indefinitely.
+ const routeAbortController = new AbortController();
+ const routeTimeoutHandle = setTimeout(function(){
+ routeAbortController.abort();
+ }, 12000);
+ // SECURITY (Phase 11, Step 4): abuse-reduction header, NOT
+ // cryptographic protection — this key is embedded in shipped client
+ // code and readable by anyone who decompiles the APK. It raises the
+ // bar against casual/scripted scraping of the bare endpoint; it does
+ // not stop a determined reverse-engineer, and no claim to the
+ // contrary should ever be made about it.
+ fetch(url, {
+ signal: routeAbortController.signal,
+ headers: { "X-SafeRoute-Client-Key": SAFEROUTE_CLIENT_KEY }
+ })
+ .then(function(response){
+ clearTimeout(routeTimeoutHandle);
+ if (!response.ok) {
+ throw new Error("Routing service returned HTTP " + response.status);
+ }
+ return response.json();
+ })
+ .then(function(data){
+ if (inFlightRouteKey === routeKey) {
+ inFlightRouteKey = null;
+ }
+ if (thisRequestId !== routeRequestId) {
+ console.log("Ignoring stale route response id=" + thisRequestId + " (superseded by id=" + routeRequestId + ")");
+ return;
+ }
+ if (data.paths && data.paths.length > 0) {
+ routeAlternatives = data.paths.map(function(path, index){
+ const coordinates = path.points.coordinates;
+ const risks = checkRouteRisk(coordinates);
+ return {
+ coordinates: coordinates,
+ instructions: path.instructions || [],
+ distanceM: path.distance,
+ timeMs: path.time,
+ risks: risks
+ };
+ });
+ // Label alternatives: fastest = least time, shortest = least
+ // distance, safest = fewest risk warnings (tie-break: time).
+ let fastestIdx = 0, shortestIdx = 0, safestIdx = 0;
+ routeAlternatives.forEach(function(alt, i){
+ if (alt.timeMs < routeAlternatives[fastestIdx].timeMs) fastestIdx = i;
+ if (alt.distanceM < routeAlternatives[shortestIdx].distanceM) shortestIdx = i;
+ if (alt.risks.length < routeAlternatives[safestIdx].risks.length ||
+ (alt.risks.length === routeAlternatives[safestIdx].risks.length && alt.timeMs < routeAlternatives[safestIdx].timeMs)) {
+ safestIdx = i;
+ }
+ });
+ routeAlternatives.forEach(function(alt){ alt.labels = []; });
+ routeAlternatives[fastestIdx].labels.push("Fastest");
+ routeAlternatives[shortestIdx].labels.push("Shortest");
+ routeAlternatives[safestIdx].labels.push("Safest");
+ console.log("Route alternatives found:", routeAlternatives.length);
+ selectedAlternativeIndex = fastestIdx;
+ selectAlternative(selectedAlternativeIndex, endLat, endLon);
+ // If voice was already on before this NEW destination was
+ // set, speak the summary now too (not just on the toggle
+ // action). Switching between Fastest/Shortest/Safest for
+ // the SAME destination goes through selectAlternative
+ // directly and does not pass through here, so this never
+ // re-announces for the same trip.
+ announceRouteSummary();
+ } else {
+ console.error("GraphHopper returned no route");
+ console.error(JSON.stringify(data));
+ showRouteError(
+ data && data.message ? data.message : "No route could be found."
+ );
+ }
+ })
+ .catch(function(fetchError){
+ clearTimeout(routeTimeoutHandle);
+ if (inFlightRouteKey === routeKey) {
+ inFlightRouteKey = null;
+ }
+ if (thisRequestId !== routeRequestId) {
+ console.log("Ignoring stale route error id=" + thisRequestId);
+ return;
+ }
+ if (fetchError && fetchError.name === "AbortError") {
+ console.error("Route request timed out after 12000ms, id=" + thisRequestId);
+ showRouteError("The routing service took too long to respond. Please try again.");
+ return;
+ }
+ console.error("GraphHopper request failed");
+ console.error(fetchError);
+ showRouteError("Could not reach the routing service. Check your connection and try again.");
+ });
+}
+// Reuses the existing routeInfoPanel (no new UI element) to show a
+// clear message when routing fails — e.g. the GraphHopper free-tier
+// rate limit we've confirmed hitting ("Minutely API limit heavily
+// violated"), or no network. Previously this failed completely
+// silently, leaving the user thinking the app was broken.
+function showRouteError(message){
+ routeInfoText.innerHTML =
+ "<div style='color:#ff9999;font-size:13px;line-height:1.4;'><svg class='sr-i sr-i-sm' aria-hidden='true'><use href='#i-alert'/></svg> " + message +
+ "</div><div style='color:rgba(255,255,255,0.6);font-size:11px;margin-top:8px;'>Tip: wait a moment and try again.</div>";
+ routeInfoPanel.style.display = "block";
+}
+function selectAlternative(index, destLat, destLon){
+ selectedAlternativeIndex = index;
+ const alt = routeAlternatives[index];
+ activeRoute = {
+ coordinates: alt.coordinates,
+ instructions: alt.instructions,
+ totalDistanceM: alt.distanceM,
+ totalTimeMs: alt.timeMs,
+ destLat: destLat,
+ destLon: destLon,
+ risks: alt.risks
+ };
+ lastSpokenInstructionIndex = -1;
+ announcedApproachingDestination = false;
+ announcedArrivedDestination = false;
+ lastNearestRouteIndex = null; // reset windowed nav search — see trackNavigationProgress
+ renderRoutePanel();
+ drawRoute(alt.coordinates);
+ drawAlternateRoutes();
+}
+function renderRoutePanel(){
+ const alt = routeAlternatives[selectedAlternativeIndex];
+ const distanceKm = (alt.distanceM / 1000).toFixed(2);
+ const timeMin = Math.round(alt.timeMs / 60000);
+ let panelHtml = "<div class='infoRow'><span>Distance</span><strong>" + distanceKm + " km</strong></div>" +
+ "<div class='infoRow'><span>Time</span><strong>" + timeMin + " min</strong></div>";
+ if (routeAlternatives.length > 1) {
+ panelHtml += "<div class='altSelectorRow'>";
+ routeAlternatives.forEach(function(a, i){
+ const labelText = a.labels.length > 0 ? a.labels[0] : ("Option " + (i + 1));
+ const isSelected = i === selectedAlternativeIndex;
+ panelHtml += "<button class='altButton" + (isSelected ? " altButtonSelected" : "") +
+ "' onclick='window.__selectAltFromUI(" + i + ")'>" + labelText + "</button>";
+ });
+ panelHtml += "</div>";
+ }
+ panelHtml += "<div class='infoRow' style='margin-top:8px;'><span>Voice Guidance</span>" +
+ "<button id='voiceToggleButton' onclick='window.__toggleVoice()'>" +
+ (voiceEnabled ? "<svg class='sr-i sr-i-sm' aria-hidden='true'><use href='#i-volume'/></svg>On" : "<svg class='sr-i sr-i-sm' aria-hidden='true'><use href='#i-volume-off'/></svg>Off") + "</button></div>";
+ if (alt.risks.length > 0) {
+ const level = alt.risks.length >= 2 ? "HIGH" : "MEDIUM";
+ const levelColor = alt.risks.length >= 2 ? "#ff6b6b" : "#f5a623";
+ panelHtml += "<div class='routeSectionDivider' style='color:" + levelColor + ";font-weight:bold;'>" +
+ "<svg class='sr-i sr-i-sm' aria-hidden='true'><use href='#i-alert'/></svg> Route Safety: " + level + " (" + alt.risks.length + " zone" + (alt.risks.length > 1 ? "s" : "") + ")</div>";
+ alt.risks.forEach(function(r){
+ const lower = r.reason.toLowerCase();
+ let riskType = "Hazard zone";
+ if (lower.indexOf("landslide") !== -1) { riskType = "Landslide risk"; }
+ else if (lower.indexOf("flood") !== -1 || lower.indexOf("glof") !== -1 || lower.indexOf("dam") !== -1 || lower.indexOf("rainfall") !== -1) { riskType = "Flood risk"; }
+ panelHtml += "<div style='color:#ff9999;font-size:12px;margin-top:6px;line-height:1.4;'>• <strong>" + riskType + ":</strong> " + r.reason + "</div>";
+ });
+ panelHtml += "<div style='color:rgba(255,255,255,0.5);font-size:10px;margin-top:6px;'>Calculated risk from known hazard data — not an official government alert.</div>";
+ } else {
+ panelHtml += "<div class='routeSectionDivider' style='color:#8fdc8f;font-weight:bold;'><svg class='sr-i sr-i-sm' aria-hidden='true'><use href='#i-check'/></svg> Route Safety: LOW — no known risk zones detected on this route</div>";
+ }
+ routeInfoText.innerHTML = panelHtml;
+ routeInfoPanel.style.display = "block";
+}
+// Exposed to window so the inline onclick handlers in the dynamically
+// generated panel HTML above can reach these (innerHTML content can't
+// use closures directly).
+window.__selectAltFromUI = function(index){
+ selectAlternative(index, activeRoute.destLat, activeRoute.destLon);
+};
+// Speaks the real route summary (distance/time) plus any known hazard
+// zones this specific route crosses (reusing the exact, already-
+// verified checkRouteRisk text — never invented). Called both when
+// voice is toggled ON with an active route, and automatically when a
+// NEW destination's route is calculated while voice is already on.
+function announceRouteSummary(){
+ if (!activeRoute) { return; }
+ const distKm = (activeRoute.totalDistanceM / 1000).toFixed(1);
+ const timeMin = Math.round(activeRoute.totalTimeMs / 60000);
+ speak("Starting navigation. Distance is " + distKm + " kilometers. Estimated travel time is " + timeMin + " minutes.");
+ if (activeRoute.risks && activeRoute.risks.length > 0) {
+ activeRoute.risks.forEach(function(r){
+ speak("Caution. " + r.reason + ".");
+ });
+ }
+}
+window.__toggleVoice = function(){
+ voiceEnabled = !voiceEnabled;
+ if (voiceEnabled) {
+ if (activeRoute) {
+ announceRouteSummary();
+ } else {
+ speak("Voice guidance on.");
+ }
+ } else if (window.speechSynthesis) {
+ window.speechSynthesis.cancel();
+ }
+ renderRoutePanel();
+};
+// ===================================================================
+// CONFIRMED ROOT CAUSE (this pass): drawRoute() batches ALL height
+// sampling into one sampleHeightMostDetailed() call (already the right
+// pattern vs. per-point calls), but for a real long mountain route this
+// can be 500+ points in a SINGLE call — and it fires every time a route
+// is (re)drawn, including every auto-reroute (checked every 8s while
+// off-route — plausible for a while on mountain roads with GPS drift).
+// That's a genuine recurring burst tied specifically to active
+// navigation, not a one-off startup cost like the earlier fixes.
+//
+// FIX: sample height at a BOUNDED number of points along the route
+// (120, matching the same bounded-work-budget pattern already used for
+// OSM_MAX_LABELS elsewhere in this file) instead of every point. Each
+// unsampled point reuses its nearest sampled neighbor's height —
+// visually indistinguishable for a route line at normal driving-camera
+// zoom (height only needs to roughly hug the terrain so the line
+// doesn't float or clip; it doesn't need per-point precision), while
+// cutting a 500-point route's sampling payload by ~75%. The line's
+// actual ground path (lat/lon) is completely unaffected — only which
+// points get an independently-sampled height is reduced.
+// ===================================================================
+const ROUTE_HEIGHT_SAMPLE_BUDGET = 120;
+function buildRouteHeightSampleIndices(totalPoints){
+ if (totalPoints <= ROUTE_HEIGHT_SAMPLE_BUDGET) {
+ // Short route — sample every point, nothing to save.
+ const all = [];
+ for (let i = 0; i < totalPoints; i++) { all.push(i); }
+ return all;
+}
+ const stride = (totalPoints - 1) / (ROUTE_HEIGHT_SAMPLE_BUDGET - 1);
+ const indices = [];
+ for (let i = 0; i < ROUTE_HEIGHT_SAMPLE_BUDGET; i++) {
+ indices.push(Math.round(i * stride));
+ }
+ return indices;
+}
+function drawRoute(coordinates){
+ if (routeEntity) {
+ viewer.entities.remove(routeEntity);
+ routeEntity = null;
+ }
+ const sampleIndices = buildRouteHeightSampleIndices(coordinates.length);
+ const sampleCartographics = sampleIndices.map(function(i){
+ return Cesium.Cartographic.fromDegrees(coordinates[i][0], coordinates[i][1]);
+ });
+ viewer.scene.sampleHeightMostDetailed(sampleCartographics).then(function(){
+ // Assign each full-resolution point the height of its NEAREST
+ // sampled neighbor (by index distance along the route, which
+ // correlates with physical distance for a road polyline).
+ const positions = coordinates.map(function(coord, pointIndex){
+ let nearestSampleI = 0;
+ let nearestDist = Infinity;
+ for (let s = 0; s < sampleIndices.length; s++) {
+ const d = Math.abs(sampleIndices[s] - pointIndex);
+ if (d < nearestDist) { nearestDist = d; nearestSampleI = s; }
+ }
+ const c = sampleCartographics[nearestSampleI];
+ const height = Cesium.defined(c.height) ? c.height + 2 : 2;
+ return Cesium.Cartesian3.fromDegrees(coord[0], coord[1], height);
+ });
+ routeEntity = viewer.entities.add({
+ polyline: {
+ positions: positions,
+ width: 8,
+ material: new Cesium.PolylineOutlineMaterialProperty({
+ color: Cesium.Color.fromCssColorString("#3b82f6"),
+ outlineWidth: 2,
+ outlineColor: Cesium.Color.fromCssColorString("#0b2a5c")
+ }),
+ disableDepthTestDistance: Number.POSITIVE_INFINITY
+ }
+ });
+ console.log("Route drawn with", positions.length, "points (" + sampleIndices.length + " height-sampled)");
+ }).catch(function(heightError){
+ console.error("Route height sampling failed, drawing at approximate height");
+ console.error(heightError);
+ const fallbackPositions = coordinates.map(function(coord){
+ return Cesium.Cartesian3.fromDegrees(coord[0], coord[1], 2);
+ });
+ routeEntity = viewer.entities.add({
+ polyline: {
+ positions: fallbackPositions,
+ width: 8,
+ material: new Cesium.PolylineOutlineMaterialProperty({
+ color: Cesium.Color.fromCssColorString("#3b82f6"),
+ outlineWidth: 2,
+ outlineColor: Cesium.Color.fromCssColorString("#0b2a5c")
+ }),
+ disableDepthTestDistance: Number.POSITIVE_INFINITY
+ }
+ });
+ });
+}
+// Draws the OTHER (non-selected) route alternatives as thin, muted
+// lines for context — tapping an alt button (selectAlternative) still
+// swaps which one is the bold, colored "active" route.
+let alternateRouteEntities = [];
+function drawAlternateRoutes(){
+ alternateRouteEntities.forEach(function(e){ viewer.entities.remove(e); });
+ alternateRouteEntities = [];
+ routeAlternatives.forEach(function(alt, index){
+ if (index === selectedAlternativeIndex) { return; }
+ const positions = alt.coordinates.map(function(coord){
+ return Cesium.Cartesian3.fromDegrees(coord[0], coord[1], 2);
+ });
+ const entity = viewer.entities.add({
+ polyline: {
+ positions: positions,
+ width: 4,
+ material: Cesium.Color.fromCssColorString("#ffffff").withAlpha(0.35),
+ disableDepthTestDistance: Number.POSITIVE_INFINITY
+ }
+ });
+ alternateRouteEntities.push(entity);
+ });
+}
+// ===================================================================
+// PHASE 7 — TAXI (simulated demo)
+// No real backend/driver data exists yet, so these taxis are
+// SIMULATED — fixed starting points that nudge randomly every few
+// seconds to look like movement. Tapping a taxi shows its info and
+// a "Request This Taxi" button, which reuses the existing navigation
+// system to draw a real road route from the user to that taxi.
+// ===================================================================
+const taxiData = [
+ { id: "taxi1", name: "Taxi 1 — Driver Pemba", lat: 27.1770, lon: 88.5280 },
+ { id: "taxi2", name: "Taxi 2 — Driver Tashi", lat: 27.1790, lon: 88.5310 },
+ { id: "taxi3", name: "Taxi 3 — Driver Norden", lat: 27.1740, lon: 88.5265 },
+ { id: "taxi4", name: "Taxi 4 — Driver Karma", lat: 27.1800, lon: 88.5250 },
+ { id: "taxi5", name: "Taxi 5 — Driver Sonam", lat: 27.1755, lon: 88.5325 }
+];
+const taxiInfoPanel = document.getElementById("taxiInfoPanel");
+const taxiInfoText = document.getElementById("taxiInfoText");
+const requestTaxiButton = document.getElementById("requestTaxiButton");
+let selectedTaxi = null;
+function addTaxiMarkers(){
+ const pinBuilder = new Cesium.PinBuilder();
+ const taxiPin = pinBuilder.fromText("T", Cesium.Color.fromCssColorString("#f5b400"), 32);
+ taxiData.forEach(function(taxi){
+ const entity = viewer.entities.add({
+ position: Cesium.Cartesian3.fromDegrees(taxi.lon, taxi.lat, 0),
+ billboard: {
+ image: taxiPin.toDataURL(),
+ verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+ scale: 0.85,
+ disableDepthTestDistance: Number.POSITIVE_INFINITY,
+ distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0.0, 6000.0)
+ }
+ });
+ entity.taxiInfo = taxi;
+ taxi.entity = entity;
+ refineEntityHeight(entity, taxi.lat, taxi.lon);
+ });
+ console.log("Taxi markers added:", taxiData.length);
+ setupTaxiCluster();
+}
+// ===================================================================
+// TAXI CLUSTER-LITE
+// Individual taxis (via distanceDisplayCondition above) only show
+// within ~6km of the camera. Beyond that, a single small badge shows
+// the count instead — a lightweight form of clustering that avoids
+// clutter when zoomed out, without a full clustering library.
+// ===================================================================
+let taxiClusterEntity = null;
+function setupTaxiCluster(){
+ const avgLat = taxiData.reduce(function(sum, t){ return sum + t.lat; }, 0) / taxiData.length;
+ const avgLon = taxiData.reduce(function(sum, t){ return sum + t.lon; }, 0) / taxiData.length;
+ const pinBuilder = new Cesium.PinBuilder();
+ const clusterPin = pinBuilder.fromText(String(taxiData.length), Cesium.Color.fromCssColorString("#f5b400"), 30);
+ taxiClusterEntity = viewer.entities.add({
+ position: Cesium.Cartesian3.fromDegrees(avgLon, avgLat, 0),
+ billboard: {
+ image: clusterPin.toDataURL(),
+ verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+ scale: 0.85,
+ disableDepthTestDistance: Number.POSITIVE_INFINITY,
+ distanceDisplayCondition: new Cesium.DistanceDisplayCondition(6000.0, 5000000.0)
+ }
+ });
+ refineEntityHeight(taxiClusterEntity, avgLat, avgLon);
+}
+// ===================================================================
+// PERFORMANCE FIX (confirmed root cause #4): simulateTaxiMovement() runs
+// on an unconditional setInterval every 4 seconds for the lifetime of
+// the app (see setInterval(simulateTaxiMovement, 4000) below), and every
+// single tick previously ran a real sampleHeightMostDetailed() terrain
+// query against the Photorealistic 3D Tiles — regardless of whether the
+// taxis are even on screen or the tileset is zoomed in enough for it to
+// matter. That is a genuinely expensive, continuously-recurring
+// background cost that runs forever, independent of user activity, and
+// is a real contributor to lag that accumulates the longer the app has
+// been open. Height is now only re-sampled every 3rd tick (~12s) and
+// skipped entirely when the camera is too high up for the ~2m accuracy
+// to be visually meaningful anyway.
+// ===================================================================
+const TAXI_HEIGHT_REFINE_EVERY_N_TICKS = 3;
+const TAXI_HEIGHT_REFINE_MAX_CAMERA_HEIGHT_M = 8000;
+let taxiSimulationTickCount = 0;
+function simulateTaxiMovement(){
+ taxiSimulationTickCount++;
+ taxiData.forEach(function(taxi){
+ taxi.lat += (Math.random() - 0.5) * 0.001;
+ taxi.lon += (Math.random() - 0.5) * 0.001;
+ if (taxi.entity) {
+ taxi.entity.position = Cesium.Cartesian3.fromDegrees(taxi.lon, taxi.lat, 0);
+ }
+ });
+ const shouldRefineHeight = (taxiSimulationTickCount % TAXI_HEIGHT_REFINE_EVERY_N_TICKS === 0) &&
+ (viewer.camera.positionCartographic.height <= TAXI_HEIGHT_REFINE_MAX_CAMERA_HEIGHT_M);
+ if (!shouldRefineHeight) { return; }
+ // Batched height lookup: one request covering all 5 taxis, instead
+ // of 5 separate requests — much lighter on performance.
+ const cartographics = taxiData.map(function(t){ return Cesium.Cartographic.fromDegrees(t.lon, t.lat); });
+ viewer.scene.sampleHeightMostDetailed(cartographics).then(function(){
+ taxiData.forEach(function(taxi, index){
+ if (taxi.entity && Cesium.defined(cartographics[index]) && Cesium.defined(cartographics[index].height)) {
+ taxi.entity.position = Cesium.Cartesian3.fromRadians(
+ cartographics[index].longitude,
+ cartographics[index].latitude,
+ cartographics[index].height
+ );
+ }
+ });
+ }).catch(function(err){
+ console.error("Batched taxi height refine failed");
+ console.error(err);
+ });
+}
+addTaxiMarkers();
+// ===================================================================
+// PHASE 8 (partial) — LIVE RAINFALL RISK WARNING
+// Real live data from Open-Meteo (free, no API key required). This is
+// a RAINFALL-BASED PROXY for flood/landslide risk, not a true river
+// gauge or landslide sensor network — no simple public API for that
+// exists yet for Sikkim. Chungthang is included specifically because
+// it's where the Teesta III Dam was destroyed by a glacial lake
+// outburst flood (GLOF) in October 2023 — a real, historically
+// significant risk point for this region.
+// Threshold: 10mm/hr+ current rainfall is flagged as elevated risk.
+// This should be upgraded to real river-gauge data once/if Google
+// Flood Hub API access is approved (see Section 8 of the handoff doc).
+// ===================================================================
+const weatherLocations = [
+ { name: "Gangtok", lat: 27.3389, lon: 88.6065 },
+ { name: "Namchi", lat: 27.1663, lon: 88.3639 },
+ { name: "Gyalshing", lat: 27.2896, lon: 88.2597 },
+ { name: "Mangan", lat: 27.5083, lon: 88.5322 },
+ { name: "Chungthang", lat: 27.6167, lon: 88.6333 }
+];
+const RAIN_RISK_THRESHOLD_MM = 10;
+const weatherRiskPanel = document.getElementById("weatherRiskPanel");
+const weatherRiskText = document.getElementById("weatherRiskText");
+const safetySheetClose = document.getElementById("safetySheetClose");
+const safetyChip = document.getElementById("safetyChip");
+const safetyChipText = document.getElementById("safetyChipText");
+safetyChip.addEventListener("click", function(){
+ const isOpen = weatherRiskPanel.style.display === "block";
+ closeAllSheets();
+ weatherRiskPanel.style.display = isOpen ? "none" : "block";
+});
+safetySheetClose.addEventListener("click", function(){
+ weatherRiskPanel.style.display = "none";
+});
+let isFetchingWeather = false;
+let lastWeatherFetchTime = 0;
+const WEATHER_MIN_INTERVAL_MS = 60000; // do not re-fetch more than once/minute
+async function fetchWeatherRisk(){
+ if (isFetchingWeather) {
+ console.log("Weather fetch already in progress — skipping duplicate call");
+ return;
+ }
+ const now = Date.now();
+ if (now - lastWeatherFetchTime < WEATHER_MIN_INTERVAL_MS &&
+ latestWeatherResults.length > 0) {
+ console.log(
+ "Reusing recent weather data (" +
+ Math.round((now - lastWeatherFetchTime) / 1000) +
+ "s old)"
+ );
+ return;
+ }
+ isFetchingWeather = true;
+ const results = [];
+ for (const loc of weatherLocations) {
+ try {
+ const url = "https://api.open-meteo.com/v1/forecast?latitude=" + loc.lat +
+ "&longitude=" + loc.lon + "&current=precipitation&timezone=auto";
+ const response = await fetch(url);
+ const data = await response.json();
+ if (!(data.current && typeof data.current.precipitation === "number")) {
+ throw new Error("precipitation missing for " + loc.name);
+ }
+ const precipitation = data.current.precipitation;
+ results.push({ name: loc.name, precipitation: precipitation });
+ } catch (weatherError) {
+ console.error("Weather fetch failed for", loc.name);
+ console.error(weatherError);
+ }
+ }
+ latestWeatherResults = results;
+ lastWeatherFetchTime = Date.now();
+ isFetchingWeather = false;
+ updateWeatherRiskPanel(results);
+}
+function updateWeatherRiskPanel(results){
+ if (results.length === 0) {
+ console.error("No weather results to display");
+ safetyChipText.textContent = "Safety data unavailable";
+ safetyChip.classList.remove("sr-chip-safe");
+ safetyChip.classList.remove("sr-chip-warn");
+ safetyChip.classList.add("sr-chip-pending");
+ weatherRiskText.innerHTML = "<div class='sr-note'>Rainfall data unavailable right now. No risk level is shown.</div>";
+ var rt = document.getElementById("srRainTag"); if (rt) { rt.textContent = "Data unavailable"; }
+ return;
+ }
+ let html = "";
+ let anyRisk = false;
+ results.forEach(function(r){
+ const risky = r.precipitation >= RAIN_RISK_THRESHOLD_MM;
+ if (risky) { anyRisk = true; }
+ html += "<div class='infoRow" + (risky ? " riskyRow" : "") + "'><span>" + r.name + "</span><strong>" +
+ r.precipitation.toFixed(1) + " mm/hr</strong></div>";
+ if (risky) {
+ html += "<div class='riskyNote'><svg class='sr-i sr-i-sm' aria-hidden='true'><use href='#i-alert'/></svg>Elevated Risk</div>";
+ }
+ });
+ weatherRiskText.innerHTML = html;
+ // Update the compact chip only — the full sheet stays closed unless
+ // the user explicitly taps the chip to open it (progressive
+ // disclosure, doesn't cover the map by default).
+ if (anyRisk) {
+ safetyChipText.textContent = "Safety: ELEVATED";
+ safetyChip.classList.remove("sr-chip-pending");
+ var rt1 = document.getElementById("srRainTag"); if (rt1) { rt1.textContent = "Monitoring"; }
+ safetyChip.classList.remove("sr-chip-safe");
+ safetyChip.classList.add("sr-chip-warn");
+ } else {
+ safetyChipText.textContent = "Safety: LOW";
+ safetyChip.classList.remove("sr-chip-pending");
+ var rt2 = document.getElementById("srRainTag"); if (rt2) { rt2.textContent = "Monitoring"; }
+ safetyChip.classList.remove("sr-chip-warn");
+ safetyChip.classList.add("sr-chip-safe");
+ }
+ console.log("Weather risk check complete. Elevated risk detected:", anyRisk);
+}
+fetchWeatherRisk();
+setInterval(fetchWeatherRisk, 600000);
+window.__srBridge = { resources: resourceData, route: setDestination };
+setInterval(simulateTaxiMovement, 4000);
+function showTaxiInfo(taxi){
+ selectedTaxi = taxi;
+ taxiInfoText.textContent = taxi.name + " (simulated) — tap below to route to it";
+ taxiInfoPanel.style.display = "block";
+}
+requestTaxiButton.addEventListener("click", function(){
+ if (selectedTaxi) {
+ taxiInfoPanel.style.display = "none";
+ setDestination(selectedTaxi.lat, selectedTaxi.lon);
+ }
+});
+viewer.screenSpaceEventHandler.setInputAction(function(movement){
+ const pickedObject = viewer.scene.pick(movement.position);
+ if (Cesium.defined(pickedObject) && Cesium.defined(pickedObject.id) && Cesium.defined(pickedObject.id.taxiInfo)) {
+ showTaxiInfo(pickedObject.id.taxiInfo);
+ return;
+ }
+ taxiInfoPanel.style.display = "none";
+ const cartesian = viewer.scene.pickPosition(movement.position);
+ if (Cesium.defined(cartesian)) {
+ const cartographic = Cesium.Cartographic.fromCartesian(cartesian);
+ const tappedLat = Cesium.Math.toDegrees(cartographic.latitude);
+ const tappedLon = Cesium.Math.toDegrees(cartographic.longitude);
+ setDestination(tappedLat, tappedLon);
+ } else {
+ console.error("Tap did not hit any surface — try tapping directly on visible terrain/buildings");
+ }
+}, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+console.log("Tap-to-navigate enabled");
+function addResourceMarkers(){
+ const resourceEntitiesForHeightRefine = [];
+ const resourceCartographicsForHeightRefine = [];
+ const pinBuilder = new Cesium.PinBuilder();
+ resourceData.forEach(function(resource){
+ let pinCanvas;
+ if (resource.type === "hospital") {
+ pinCanvas = pinBuilder.fromText("+", Cesium.Color.RED, 48);
+ } else if (resource.type === "police") {
+ pinCanvas = pinBuilder.fromText("P", Cesium.Color.BLUE, 48);
+ } else if (resource.type === "dam") {
+ pinCanvas = pinBuilder.fromText("D", Cesium.Color.ORANGE, 48);
+ } else {
+ pinCanvas = pinBuilder.fromText("?", Cesium.Color.GRAY, 48);
+ }
+ const newEntity = viewer.entities.add({
+ name: resource.name,
+ position: Cesium.Cartesian3.fromDegrees(resource.lon, resource.lat, 0),
+ billboard: {
+ image: pinCanvas.toDataURL(),
+ verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+ scale: 0.75,
+ disableDepthTestDistance: Number.POSITIVE_INFINITY,
+ distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0.0, 15000.0)
+ },
+ label: {
+ text: resource.name,
+ font: "12px sans-serif",
+ fillColor: Cesium.Color.WHITE,
+ outlineColor: Cesium.Color.BLACK,
+ outlineWidth: 3,
+ style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+ verticalOrigin: Cesium.VerticalOrigin.TOP,
+ pixelOffset: new Cesium.Cartesian2(0, 5),
+ disableDepthTestDistance: Number.POSITIVE_INFINITY,
+ distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0.0, 2500.0)
+ }
+ });
+ resourceEntitiesForHeightRefine.push(newEntity);
+ resourceCartographicsForHeightRefine.push(Cesium.Cartographic.fromDegrees(resource.lon, resource.lat));
+ });
+ console.log("Resource markers added:", resourceData.length);
+ // CONFIRMED FIX (this pass): previously called refineEntityHeight()
+ // individually per resource marker — resourceData.length (~17)
+ // separate sampleHeightMostDetailed() promises fired back-to-back at
+ // startup. Batched into one call, same pattern already used for OSM
+ // places and taxis.
+ if (resourceCartographicsForHeightRefine.length > 0) {
+ viewer.scene.sampleHeightMostDetailed(resourceCartographicsForHeightRefine).then(function(){
+ resourceEntitiesForHeightRefine.forEach(function(entity, i){
+ const c = resourceCartographicsForHeightRefine[i];
+ if (Cesium.defined(c.height)) {
+ entity.position = Cesium.Cartesian3.fromRadians(c.longitude, c.latitude, c.height);
+ }
+ });
+ }).catch(function(err){
+ console.error("Batched resource marker height refine failed (markers still visible at approximate height)");
+ console.error(err);
+ });
+ }
+}
+addResourceMarkers();
+// ===================================================================
+// TOWN / DISTRICT NAME LABELS
+// The flat base map (with its own place-name labels) is hidden now
+// that the 3D tileset is the ground surface (globe: false), so we add
+// our own bold labels for major towns and all 4 district headquarters
+// so tourists/locals can still orient themselves by name.
+// ===================================================================
+const placeLabels = [
+ { name: "GANGTOK", district: true, lat: 27.3389, lon: 88.6065 },
+ { name: "NAMCHI", district: true, lat: 27.1663, lon: 88.3639 },
+ { name: "GYALSHING", district: true, lat: 27.2896, lon: 88.2597 },
+ { name: "MANGAN", district: true, lat: 27.5083, lon: 88.5322 },
+ { name: "Rangpo", district: false, lat: 27.176147, lon: 88.528734 },
+ { name: "Majitar", district: false, lat: 27.187601, lon: 88.499709 },
+ { name: "Singtam", district: false, lat: 27.2296952, lon: 88.4946887 },
+ { name: "Ranipool", district: false, lat: 27.2936311, lon: 88.5908099 }
+];
+function addPlaceLabels(){
+ const labelEntitiesForHeightRefine = [];
+ const labelCartographicsForHeightRefine = [];
+ placeLabels.forEach(function(place){
+ const newEntity = viewer.entities.add({
+ position: Cesium.Cartesian3.fromDegrees(place.lon, place.lat, 0),
+ label: {
+ text: place.name,
+ font: place.district ? "bold 20px sans-serif" : "14px sans-serif",
+ fillColor: place.district ? Cesium.Color.YELLOW : Cesium.Color.WHITE,
+ outlineColor: Cesium.Color.BLACK,
+ outlineWidth: 4,
+ style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+ verticalOrigin: Cesium.VerticalOrigin.CENTER,
+ disableDepthTestDistance: Number.POSITIVE_INFINITY,
+ distanceDisplayCondition: place.district
+ ? new Cesium.DistanceDisplayCondition(0.0, 60000.0)
+ : new Cesium.DistanceDisplayCondition(0.0, 4000.0)
+ }
+ });
+ labelEntitiesForHeightRefine.push(newEntity);
+ labelCartographicsForHeightRefine.push(Cesium.Cartographic.fromDegrees(place.lon, place.lat));
+ });
+ console.log("Place labels added:", placeLabels.length);
+ // CONFIRMED FIX (this pass): previously called refineEntityHeight()
+ // individually per label — 8 separate sampleHeightMostDetailed()
+ // promises fired back-to-back at startup, right alongside the ~17
+ // individual resource-marker calls above. Both together meant roughly
+ // 25 concurrent terrain queries firing in the same startup window —
+ // now each batched into one call apiece.
+ if (labelCartographicsForHeightRefine.length > 0) {
+ viewer.scene.sampleHeightMostDetailed(labelCartographicsForHeightRefine).then(function(){
+ labelEntitiesForHeightRefine.forEach(function(entity, i){
+ const c = labelCartographicsForHeightRefine[i];
+ if (Cesium.defined(c.height)) {
+ entity.position = Cesium.Cartesian3.fromRadians(c.longitude, c.latitude, c.height);
+ }
+ });
+ }).catch(function(err){
+ console.error("Batched place label height refine failed (labels still visible at approximate height)");
+ console.error(err);
+ });
+ }
+}
+addPlaceLabels();
+viewer.scene.renderError.addEventListener(function(scene, error) {
+ console.log("========== RENDER ERROR ==========");
+ console.log(error);
+ console.dir(error);
+ if (error) {
+ console.log("constructor:", error.constructor?.name);
+ console.log("message:", error.message);
+ console.log("stack:", error.stack);
+ for (const key of Object.getOwnPropertyNames(error)) {
+ console.log(key + " = ", error[key]);
+ }
+ }
+});
+// globe is disabled (globe: false), so the old globe.tileLoadProgressEvent
+// no longer applies. Tile loading progress for the 3D tileset itself is
+// tracked via console logs at creation time instead (see above).
+console.log("SafeRoute Ready");
+}
+catch(e){
+console.error("CESIUM FAILED");
+console.error(e);
+document.body.innerHTML =
+"<h2 style='color:white;background:black;padding:20px'>Cesium failed.<br><br>"+e+"</h2>";
+}
+})();
+</script>
+</body>
+</html>

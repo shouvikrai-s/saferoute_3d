@@ -1,0 +1,158 @@
+{
+  "modelName": "SafeRouteFloodBaseline",
+  "modelVersion": "0.2.0",
+  "algorithm": "weighted-lag-baseline",
+  "modelType": "flood-discharge-forecast",
+  "status": "trained",
+  "trainingStatus": "trained",
+  "trainingDataProvenance": "The model was trained on provider-derived Open-Meteo discharge estimates in data\\processed\\flood_normalized.json. These are not verified in-situ gauge observations. Future-dated records after 2026-10-11 were excluded. Eligible input dates span 2026-09-09 through 2026-10-11.",
+  "trainingDataType": "provider-derived discharge estimates; not verified in-situ gauge observations",
+  "featureDefinitions": {
+    "lag1": {
+      "unit": "m3/s",
+      "description": "Previous day's discharge at the same station."
+    },
+    "mean7": {
+      "unit": "m3/s",
+      "description": "Trailing 7-day rolling mean discharge at the same station."
+    }
+  },
+  "normalization": "Discharge values are kept in native m3/s units with a chronological 70/30 split and no leakage across the split boundary.",
+  "artifactPath": "C:\\projects\\saferoute_3d\\backend\\data\\model-artifacts\\saferoute-flood-baseline-0.2.0.json",
+  "trainingWindow": {
+    "start": "2026-09-09",
+    "end": "2026-10-11",
+    "asOfDate": "2026-10-11",
+    "split": "chronological_70_30",
+    "station_count": 6
+  },
+  "evaluation": {
+    "baseline": {
+      "metric": "MAE",
+      "value_m3_s": 2.6505
+    },
+    "model": {
+      "metric": "MAE",
+      "value_m3_s": 9.0978
+    },
+    "improvement_pct": -243.2491,
+    "notes": "A chronological 70/30 split was used within provider-derived discharge estimates through 2026-10-11; post-as-of-date records were excluded. These estimates are not independent gauge observations, so this evaluation does not validate real-world flood-warning performance."
+  },
+  "locations": [
+    {
+      "location_id": 0,
+      "history_count": 33,
+      "station_mean_m3_s": 4.065151515151515,
+      "station_median_m3_s": 3.98,
+      "intercept": 4.8332,
+      "lag1_weight": 0.7753,
+      "mean7_weight": -0.8128,
+      "residual_rmse_m3_s": 1.6478,
+      "validation": {
+        "train_size": 23,
+        "test_size": 10,
+        "model_mae": 1.5883,
+        "baseline_mae": 0.159,
+        "baseline_rmse": 0.192,
+        "model_rmse": 1.6478,
+        "improvement_pct": -898.9234
+      }
+    },
+    {
+      "location_id": 1,
+      "history_count": 33,
+      "station_mean_m3_s": 186.93363636363634,
+      "station_median_m3_s": 197.61,
+      "intercept": 52.9099,
+      "lag1_weight": 0.863,
+      "mean7_weight": -0.1193,
+      "residual_rmse_m3_s": 24.8291,
+      "validation": {
+        "train_size": 23,
+        "test_size": 10,
+        "model_mae": 24.3187,
+        "baseline_mae": 7.159,
+        "baseline_rmse": 7.9475,
+        "model_rmse": 24.8291,
+        "improvement_pct": -239.6939
+      }
+    },
+    {
+      "location_id": 2,
+      "history_count": 33,
+      "station_mean_m3_s": 2.808181818181818,
+      "station_median_m3_s": 2.56,
+      "intercept": 3.0982,
+      "lag1_weight": 0.6635,
+      "mean7_weight": -0.6366,
+      "residual_rmse_m3_s": 1.0634,
+      "validation": {
+        "train_size": 23,
+        "test_size": 10,
+        "model_mae": 0.9888,
+        "baseline_mae": 0.136,
+        "baseline_rmse": 0.1508,
+        "model_rmse": 1.0634,
+        "improvement_pct": -627.0936
+      }
+    },
+    {
+      "location_id": 3,
+      "history_count": 33,
+      "station_mean_m3_s": 167.58000000000004,
+      "station_median_m3_s": 158.59,
+      "intercept": 209.1914,
+      "lag1_weight": 0.7684,
+      "mean7_weight": -0.9593,
+      "residual_rmse_m3_s": 30.9103,
+      "validation": {
+        "train_size": 23,
+        "test_size": 10,
+        "model_mae": 26.2673,
+        "baseline_mae": 8.17,
+        "baseline_rmse": 8.9563,
+        "model_rmse": 30.9103,
+        "improvement_pct": -221.5089
+      }
+    },
+    {
+      "location_id": 4,
+      "history_count": 33,
+      "station_mean_m3_s": 3.7221212121212117,
+      "station_median_m3_s": 3.79,
+      "intercept": 2.2157,
+      "lag1_weight": 0.9243,
+      "mean7_weight": -0.4292,
+      "residual_rmse_m3_s": 0.9628,
+      "validation": {
+        "train_size": 23,
+        "test_size": 10,
+        "model_mae": 0.9373,
+        "baseline_mae": 0.125,
+        "baseline_rmse": 0.1465,
+        "model_rmse": 0.9628,
+        "improvement_pct": -649.8651
+      }
+    },
+    {
+      "location_id": 5,
+      "history_count": 33,
+      "station_mean_m3_s": 3.154242424242425,
+      "station_median_m3_s": 2.72,
+      "intercept": 2.3852,
+      "lag1_weight": 0.759,
+      "mean7_weight": -0.463,
+      "residual_rmse_m3_s": 0.5911,
+      "validation": {
+        "train_size": 23,
+        "test_size": 10,
+        "model_mae": 0.4865,
+        "baseline_mae": 0.154,
+        "baseline_rmse": 0.1659,
+        "model_rmse": 0.5911,
+        "improvement_pct": -215.8923
+      }
+    }
+  ],
+  "createdAt": "2026-10-11T06:21:03.548Z"
+}

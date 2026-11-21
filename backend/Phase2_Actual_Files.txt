@@ -1,0 +1,866 @@
+ 
+================================================== 
+=== services\upstreamQueue.js === 
+================================================== 
+const metrics = require("./metrics");
+
+const MAX_CONCURRENT = Number(process.env.GRAPHHOPPER_MAX_CONCURRENT || 5);
+const QUEUE_MAX_DEPTH = Number(process.env.UPSTREAM_QUEUE_MAX_DEPTH || 50);
+const MAX_RETRIES = Number(process.env.UPSTREAM_MAX_RETRIES || 2);
+const RETRY_BASE_MS = Number(process.env.UPSTREAM_RETRY_BASE_MS || 200);
+const RETRY_MAX_MS = Number(process.env.UPSTREAM_RETRY_MAX_MS || 2000);
+const CIRCUIT_FAILURE_THRESHOLD = Number(process.env.CIRCUIT_FAILURE_THRESHOLD || 5);
+const CIRCUIT_OPEN_DURATION_MS = Number(process.env.CIRCUIT_OPEN_DURATION_MS || 10000);
+
+const RETRYABLE_STATUSES = new Set([429, 502, 503, 504]);
+
+let activeCount = 0;
+const queue = []; // FIFO of { resolve, reject, taskFn }
+
+let circuitState = "CLOSED"; // "CLOSED" | "OPEN" | "HALF_OPEN"
+let consecutiveFailures = 0;
+let circuitOpenedAt = null;
+let halfOpenTrialInFlight = false;
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function backoffDelay(attempt) {
+  const exp = Math.min(RETRY_BASE_MS * 2 ** attempt, RETRY_MAX_MS);
+  const jitter = Math.random() * exp * 0.5;
+  return Math.round(exp * 0.5 + jitter);
+}
+
+function circuitStateToGaugeValue(state) {
+  return state === "CLOSED" ? 0 : state === "HALF_OPEN" ? 1 : 2;
+}
+
+function updateCircuitMetric() {
+  metrics.setGauge("upstream_circuit_state", circuitStateToGaugeValue(circuitState));
+}
+
+function recordSuccess() {
+  consecutiveFailures = 0;
+  if (circuitState === "HALF_OPEN") {
+    circuitState = "CLOSED";
+    halfOpenTrialInFlight = false;
+    console.log("[upstreamQueue] circuit breaker: HALF_OPEN -> CLOSED (trial succeeded)");
+    updateCircuitMetric();
+  }
+}
+
+function recordFailure() {
+  if (circuitState === "HALF_OPEN") {
+    circuitState = "OPEN";
+    circuitOpenedAt = Date.now();
+    halfOpenTrialInFlight = false;
+    console.warn("[upstreamQueue] circuit breaker: HALF_OPEN -> OPEN (trial failed)");
+    updateCircuitMetric();
+    return;
+  }
+  consecutiveFailures++;
+  if (circuitState === "CLOSED" && consecutiveFailures >= CIRCUIT_FAILURE_THRESHOLD) {
+    circuitState = "OPEN";
+    circuitOpenedAt = Date.now();
+    console.warn(
+      `[upstreamQueue] circuit breaker: CLOSED -> OPEN (${consecutiveFailures} consecutive failures)`
+    );
+    updateCircuitMetric();
+  }
+}
+
+function circuitBreakerError() {
+  const err = new Error("Circuit breaker open -- upstream routing service is currently unhealthy");
+  err.upstreamStatus = 503;
+  err.circuitOpen = true;
+  return err;
+}
+
+function capacityExhaustedError() {
+  const err = new Error("Upstream request queue is full -- server is at capacity");
+  err.upstreamStatus = 503;
+  err.capacityExhausted = true;
+  return err;
+}
+
+function processQueue() {
+  if (activeCount >= MAX_CONCURRENT) return;
+  const next = queue.shift();
+  if (!next) return;
+  metrics.setGauge("upstream_queue_depth", queue.length);
+  runTask(next.taskFn, next.resolve, next.reject, next.isHalfOpenTrial);
+}
+
+async function runTask(taskFn, resolve, reject, isHalfOpenTrial = false) {
+  activeCount++;
+  metrics.setGauge("upstream_in_flight", activeCount);
+
+  let attempt = 0;
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    try {
+      const data = await taskFn();
+      recordSuccess();
+      activeCount--;
+      metrics.setGauge("upstream_in_flight", activeCount);
+      processQueue();
+      resolve(data);
+      return;
+    } catch (err) {
+      const status = err && err.upstreamStatus;
+      // A HALF_OPEN trial gets exactly one attempt -- never retried,
+      // regardless of status code. Normal (non-trial) requests keep
+      // the existing retry behavior unchanged.
+      const canRetry = !isHalfOpenTrial && RETRYABLE_STATUSES.has(status) && attempt < MAX_RETRIES;
+      if (canRetry) {
+        attempt++;
+        metrics.incr("upstream_retries_total");
+        const delay = backoffDelay(attempt);
+        console.warn(
+          `[upstreamQueue] retrying after status=${status}, attempt=${attempt}/${MAX_RETRIES}, delayMs=${delay}`
+        );
+        await sleep(delay);
+        continue;
+      }
+      recordFailure();
+      activeCount--;
+      metrics.setGauge("upstream_in_flight", activeCount);
+      processQueue();
+      reject(err);
+      return;
+    }
+  }
+}
+
+function runThroughUpstreamQueue(taskFn) {
+  if (circuitState === "OPEN") {
+    if (Date.now() - circuitOpenedAt >= CIRCUIT_OPEN_DURATION_MS) {
+      circuitState = "HALF_OPEN";
+      halfOpenTrialInFlight = false;
+      console.log("[upstreamQueue] circuit breaker: OPEN -> HALF_OPEN (cooldown elapsed, allowing trial)");
+      updateCircuitMetric();
+    } else {
+      return Promise.reject(circuitBreakerError());
+    }
+  }
+
+  let isHalfOpenTrial = false;
+  if (circuitState === "HALF_OPEN") {
+    if (halfOpenTrialInFlight) {
+      return Promise.reject(circuitBreakerError());
+    }
+    halfOpenTrialInFlight = true;
+    isHalfOpenTrial = true;
+  }
+
+  return new Promise((resolve, reject) => {
+    if (activeCount < MAX_CONCURRENT) {
+      runTask(taskFn, resolve, reject, isHalfOpenTrial);
+      return;
+    }
+    if (queue.length >= QUEUE_MAX_DEPTH) {
+      metrics.incr("upstream_rejected_capacity_total");
+      reject(capacityExhaustedError());
+      return;
+    }
+    queue.push({ taskFn, resolve, reject, isHalfOpenTrial });
+    metrics.setGauge("upstream_queue_depth", queue.length);
+  });
+}
+
+function getStatus() {
+  return {
+    circuitState,
+    consecutiveFailures,
+    queueDepth: queue.length,
+    inFlight: activeCount,
+    maxConcurrent: MAX_CONCURRENT,
+    queueMaxDepth: QUEUE_MAX_DEPTH,
+  };
+}
+
+module.exports = { runThroughUpstreamQueue, getStatus };
+ 
+================================================== 
+=== test\mock-graphhopper.js === 
+================================================== 
+// LOCAL MOCK GRAPHHOPPER — testing only, never called by production code.
+//
+// Simulates the upstream behaviors Phase 1 needs to prove against:
+// fast 200, slow (configurable delay), 429, 502/503/504, and a
+// "persistent_fail" mode that always errors (for circuit-breaker
+// testing). Behavior is controlled via POST /mock/config so test
+// scripts can flip modes without restarting this process or touching
+// the real backend's coordinate values.
+//
+// Run standalone: node test/mock-graphhopper.js
+// Default port: 8990 (does not collide with the real backend on 3000
+// or real self-hosted GraphHopper's usual 8989).
+
+const express = require("express");
+const app = express();
+app.use(express.json());
+
+const PORT = Number(process.env.MOCK_PORT || 8990);
+
+let state = {
+  mode: "fast", // "fast" | "slow" | "429" | "502" | "503" | "504" | "persistent_fail"
+  delayMs: 3000, // used by "slow" mode
+};
+
+let requestCount = 0;
+
+function samplePathResponse() {
+  // Minimal but shape-correct GraphHopper response — real coordinates
+  // near Gangtok/Rangpo so it's obviously mock data, never confusable
+  // with a real route.
+  return {
+    paths: [
+      {
+        points: {
+          type: "LineString",
+          coordinates: [
+            [88.6065, 27.3389],
+            [88.6142, 27.3314],
+          ],
+        },
+        instructions: [
+          { text: "MOCK ROUTE — not a real GraphHopper response", distance: 1000, time: 60000, interval: [0, 1] },
+        ],
+        distance: 1000,
+        time: 60000,
+      },
+    ],
+  };
+}
+
+app.post("/mock/config", (req, res) => {
+  const { mode, delayMs } = req.body || {};
+  const validModes = ["fast", "slow", "429", "502", "503", "504", "persistent_fail"];
+  if (mode !== undefined) {
+    if (!validModes.includes(mode)) {
+      return res.status(400).json({ error: "invalid_mode", validModes });
+    }
+    state.mode = mode;
+  }
+  if (delayMs !== undefined) {
+    state.delayMs = Number(delayMs);
+  }
+  console.log(`[mock-graphhopper] config set: mode=${state.mode} delayMs=${state.delayMs}`);
+  res.status(200).json({ state });
+});
+
+app.post("/mock/reset", (req, res) => {
+  requestCount = 0;
+  res.status(200).json({ requestCount });
+});
+
+app.get("/mock/status", (req, res) => {
+  res.status(200).json({ state, requestCount });
+});
+
+app.get("/route", async (req, res) => {
+  requestCount++;
+  const thisRequestNum = requestCount;
+  console.log(`[mock-graphhopper] GET /route #${thisRequestNum} (mode=${state.mode})`);
+
+  switch (state.mode) {
+    case "fast":
+      return res.status(200).json(samplePathResponse());
+
+    case "slow":
+      await new Promise((resolve) => setTimeout(resolve, state.delayMs));
+      return res.status(200).json(samplePathResponse());
+
+    case "429":
+      return res.status(429).json({ message: "MOCK: rate limit exceeded" });
+
+    case "502":
+      return res.status(502).json({ message: "MOCK: bad gateway" });
+
+    case "503":
+      return res.status(503).json({ message: "MOCK: service unavailable" });
+
+    case "504":
+      return res.status(504).json({ message: "MOCK: gateway timeout" });
+
+    case "persistent_fail":
+      return res.status(500).json({ message: "MOCK: persistent upstream failure" });
+
+    default:
+      return res.status(500).json({ message: "MOCK: unknown state" });
+  }
+});
+
+app.listen(PORT, "127.0.0.1", () => {
+  console.log(`[mock-graphhopper] listening on http://127.0.0.1:${PORT}`);
+  console.log(`  GET  /route`);
+  console.log(`  POST /mock/config   { "mode": "fast|slow|429|502|503|504|persistent_fail", "delayMs": 3000 }`);
+  console.log(`  GET  /mock/status`);
+  console.log(`  POST /mock/reset`);
+});
+ 
+================================================== 
+=== services\redisClient.js === 
+================================================== 
+// Thin Redis wrapper with graceful, automatic fallback.
+//
+// Redis is treated as an optional shared-state ACCELERATOR, never a
+// hard dependency:
+//  - If REDIS_URL is not set              -> in-memory fallback, no attempt made.
+//  - If the `ioredis` package isn't installed -> in-memory fallback, logged once.
+//  - If Redis is unreachable/down          -> in-memory fallback, logged, retried
+//                                             in the background by ioredis itself.
+//
+// This means a single unhealthy Redis instance can NEVER take the whole
+// API down — every caller (rateLimit.js, graphhopper.js) checks
+// isAvailable() and falls back to its existing bounded in-memory logic
+// on every call, not just at startup, so a mid-session Redis outage
+// degrades gracefully to single-instance behavior instead of erroring.
+//
+// CONFIRMED vs REQUIRES INFRASTRUCTURE:
+//  - This file is CODE INSPECTED + SYNTAX CHECKED.
+//  - It has NOT been exercised against a real Redis instance in this
+//    session (no network access here) — that requires you to run it
+//    against actual Redis (self-hosted or managed, e.g. Upstash/Redis
+//    Cloud/ElastiCache) and confirm the "[redis] connected" log line.
+
+const REDIS_URL = process.env.REDIS_URL || "";
+
+let client = null;
+let connected = false;
+let attemptedConnect = false;
+
+function tryConnect() {
+  if (attemptedConnect) return;
+  attemptedConnect = true;
+
+  if (!REDIS_URL) {
+    console.log("[redis] REDIS_URL not set — running with in-memory fallback only.");
+    return;
+  }
+
+  let Redis;
+  try {
+    Redis = require("ioredis");
+  } catch (e) {
+    console.warn(
+      "[redis] REDIS_URL is set but the `ioredis` package is not installed. " +
+      "Run `npm install ioredis` in backend/ to enable shared Redis cache/rate-limiting. " +
+      "Running with in-memory fallback only."
+    );
+    return;
+  }
+
+  try {
+    client = new Redis(REDIS_URL, {
+      // Fail fast rather than queueing requests indefinitely if Redis
+      // is down — callers fall back to in-memory logic immediately.
+      maxRetriesPerRequest: 1,
+      retryStrategy: (times) => Math.min(times * 200, 2000),
+      lazyConnect: false,
+    });
+
+    client.on("connect", () => {
+      connected = true;
+      console.log("[redis] connected: " + REDIS_URL.replace(/:\/\/.*@/, "://***@"));
+    });
+
+    client.on("error", (err) => {
+      if (connected) {
+        console.error("[redis] connection error, falling back to in-memory:", err.message);
+      }
+      connected = false;
+    });
+  } catch (e) {
+    console.error("[redis] failed to initialize client:", e.message);
+    client = null;
+  }
+}
+
+tryConnect();
+
+function isAvailable() {
+  return Boolean(client) && connected;
+}
+
+function getClient() {
+  return client;
+}
+
+module.exports = { getClient, isAvailable }; 
+================================================== 
+=== server.js === 
+================================================== 
+require("dotenv").config();
+
+const express = require("express");
+const os = require("os");
+const routeRouter = require("./routes/route");
+const graphhopper = require("./services/graphhopper");
+const redis = require("./services/redisClient");
+const metrics = require("./services/metrics");
+
+const app = express();
+const PORT = Number(process.env.PORT || 3000);
+
+// ---------------------------------------------------------------------
+// PROXY TRUST (Phase 11, Step 6): app.set("trust proxy", ...) controls
+// how Express derives req.ip. Left at Express's default (untrusted,
+// i.e. req.ip = the direct TCP peer) for THIS deployment, because there
+// is currently no reverse proxy in front of this server — the phone
+// connects directly to 192.168.1.5:3000. Blindly setting `true` now
+// would be WRONG and a real security hole: it would make Express trust
+// an X-Forwarded-For header from anyone who can reach this server
+// directly, letting them spoof any req.ip they want and bypass the
+// per-IP rate limiter entirely.
+//
+// TO ENABLE LATER, once a real reverse proxy (see deploy/nginx sample)
+// sits in front of this app: set trust proxy to the SPECIFIC proxy
+// address/subnet, not `true`:
+//   app.set("trust proxy", "loopback"); // if NGINX runs on the same host
+// or
+//   app.set("trust proxy", "10.0.0.0/8"); // if NGINX is on a known internal subnet
+// Never use `app.set("trust proxy", true)` in production — it trusts
+// ALL upstream hops, which is the same spoofing hole as not setting it
+// at all when the real proxy chain is more than one hop.
+// ---------------------------------------------------------------------
+
+// Basic request logging (method, path, status, duration) + metrics
+// counters. Deliberately simple — no external logging dependency for
+// this phase.
+//
+// PRIVACY FIX (Phase 11, Step 2): previously logged req.originalUrl,
+// which includes the full query string — i.e. every user's raw
+// startLat/startLon/endLat/endLon on every request, written to stdout
+// (and anywhere stdout is shipped: log files, log aggregators, cloud
+// provider logging). req.path logs the route ("/api/route") without
+// the coordinates. Per-route metrics (route_requests_total etc.) are
+// unaffected — metrics.js counts independently of this log line.
+app.use((req, res, next) => {
+  const startedAt = Date.now();
+  res.on("finish", () => {
+    const durationMs = Date.now() - startedAt;
+    metrics.incr("http_requests_total");
+    metrics.incrStatus(res.statusCode);
+    console.log(
+      `${new Date().toISOString()} ${req.method} ${req.path} -> ${res.statusCode} (${durationMs}ms)`
+    );
+  });
+  next();
+});
+
+// ---------------------------------------------------------------------
+// SECURITY HEADERS (Phase 11, Step 3) — hand-added, no new dependency,
+// consistent with how CORS below is already done in this file.
+//
+// Strict-Transport-Security is DELIBERATELY NOT added: this server is
+// plain HTTP on a LAN. HSTS tells browsers/clients "only ever use HTTPS
+// for this host, remember that for N seconds" — sending it now would
+// actively break the current working LAN HTTP setup the next time a
+// client tried to connect. Add HSTS only once a real TLS-terminating
+// reverse proxy is actually deployed in front of this app (see Step 9
+// note near app.listen below).
+// ---------------------------------------------------------------------
+app.use((req, res, next) => {
+  res.set("X-Content-Type-Options", "nosniff");
+  res.set("X-Frame-Options", "DENY");
+  res.set("Referrer-Policy", "no-referrer");
+  next();
+});
+
+// ---------------------------------------------------------------------
+// CORS (confirmed gap, NOT confirmed as the cause of your route
+// failures — your own telemetry showed routes id=1-6 succeeding, which
+// wouldn't happen if CORS were actively blocking every request. Added
+// as defensive hardening regardless: this backend was found to have
+// ZERO CORS headers anywhere. The WebView loads HelloWorld.html from
+// http://127.0.0.1:<local_assets_server_port> (confirmed in main.dart),
+// which is a different origin than http://192.168.1.2:3000 even on the
+// same physical machine — a real cross-origin fetch. Permissive `*` is
+// appropriate here: this endpoint serves no cookies/credentials and is
+// already rate-limited per IP.
+// ---------------------------------------------------------------------
+app.use((req, res, next) => {
+  res.set("Access-Control-Allow-Origin", "*");
+  res.set("Access-Control-Allow-Methods", "GET, OPTIONS");
+  res.set("Access-Control-Allow-Headers", "Content-Type, X-SafeRoute-Client-Key");
+  if (req.method === "OPTIONS") {
+    return res.status(204).end();
+  }
+  next();
+});
+
+app.use("/api", routeRouter);
+
+// GET /health — never exposes keys/secrets/config values, only status.
+app.get("/health", (req, res) => {
+  const routingStatus = graphhopper.getStatus();
+  res.status(200).json({
+    status: "ok",
+    server: {
+      uptimeSeconds: Math.round(process.uptime()),
+      timestamp: new Date().toISOString(),
+    },
+    routing: {
+      mode: routingStatus.mode,
+      // booleans only — never the actual key/url values
+      cloudConfigured: routingStatus.cloudConfigured,
+      selfHostedConfigured: routingStatus.selfHostedConfigured,
+      cacheBackend: routingStatus.cacheBackend,
+      cacheSize: routingStatus.cacheSize,
+      cacheMaxEntries: routingStatus.cacheMaxEntries,
+      inFlightRequests: routingStatus.inFlightCount,
+    },
+    redis: {
+      configured: Boolean(process.env.REDIS_URL),
+      connected: redis.isAvailable(),
+    },
+  });
+});
+
+// GET /metrics — Prometheus text exposition format, scrape this per
+// instance (see metrics.js SCALE NOTE — counters are per-process).
+app.get("/metrics", (req, res) => {
+  res.set("Content-Type", "text/plain; version=0.0.4");
+  res.status(200).send(metrics.renderPrometheus());
+});
+
+// GET /live — process-level liveness only (is the Node process up and
+// serving requests at all). Deliberately does NOT check upstream
+// GraphHopper or any dependency — a liveness probe should only fail
+// when THIS process needs to be restarted, not when a dependency is
+// slow/down (that's what /ready is for).
+app.get("/live", (req, res) => {
+  res.status(200).json({ status: "ok" });
+});
+
+// GET /ready — readiness: is this instance currently able to serve a
+// real /api/route request. Checks that the routing service reports at
+// least one configured backend (cloud or self-hosted GraphHopper).
+// Redis is intentionally NOT part of the pass/fail decision: it's an
+// optional accelerator with automatic fallback (see redisClient.js), so
+// an instance is still genuinely "ready" to serve correctly without
+// it — just not yet benefiting from shared cross-instance caching.
+// Redis status is reported for visibility, not used to fail the probe.
+app.get("/ready", (req, res) => {
+  const routingStatus = graphhopper.getStatus();
+  const isReady = routingStatus.cloudConfigured || routingStatus.selfHostedConfigured;
+  res.status(isReady ? 200 : 503).json({
+    status: isReady ? "ready" : "not_ready",
+    routing: {
+      mode: routingStatus.mode,
+      cloudConfigured: routingStatus.cloudConfigured,
+      selfHostedConfigured: routingStatus.selfHostedConfigured,
+    },
+    redis: {
+      configured: Boolean(process.env.REDIS_URL),
+      connected: redis.isAvailable(),
+      note: "Informational only — Redis is optional and does not affect readiness.",
+    },
+  });
+});
+
+// 404 for anything else
+app.use((req, res) => {
+  res.status(404).json({ error: "not_found", message: "Unknown endpoint." });
+});
+
+// ---------------------------------------------------------------------
+// LAN-visibility helper (fixes a real point of confusion): app.listen(PORT,
+// cb) with no host argument already binds to ALL interfaces by default
+// (Node's net.Server default, confirmed behavior — not something this
+// code needs to change). The misleading part was the OLD log line
+// hardcoding "127.0.0.1" regardless of how the phone/device actually
+// reaches it. This prints every real LAN IP this machine currently has,
+// so "is the backend reachable from my physical phone" becomes a direct
+// visual check instead of a guess.
+// ---------------------------------------------------------------------
+function getLanAddresses() {
+  const interfaces = os.networkInterfaces();
+  const addresses = [];
+  for (const name of Object.keys(interfaces)) {
+    for (const iface of interfaces[name] || []) {
+      if (iface.family === "IPv4" && !iface.internal) {
+        addresses.push({ name, address: iface.address });
+      }
+    }
+  }
+  return addresses;
+}
+
+// ---------------------------------------------------------------------
+// TLS READINESS (Phase 11, Step 9 — documentation only, no fake HTTPS
+// added here). This app currently serves plain HTTP, correct for LAN
+// development, NOT acceptable for WAN/production or a government
+// deployment. Production requirement: put a real TLS-terminating
+// reverse proxy (see deploy/nginx.saferoute.conf.sample — extend it
+// with a real cert via certbot/managed cert) in front of this Node
+// process; this app itself does not need to change to sit behind one —
+// it already just listens on a plain port, which is exactly what a
+// reverse-proxy-fronted Node app should do. Once that proxy exists:
+// (1) enable trust proxy per the Step 6 note above, (2) add HSTS at
+// that point, not before.
+// ---------------------------------------------------------------------
+// ---------------------------------------------------------------------
+// GRACEFUL SHUTDOWN (Phase 1, Step 9 — confirmed absent on inspection).
+// On SIGTERM/SIGINT: stop accepting new connections immediately, let
+// in-flight requests finish within a bounded timeout, then exit. Does
+// NOT touch normal `npm start` dev behavior — this only runs when the
+// process actually receives one of these signals (Ctrl+C sends SIGINT).
+// ---------------------------------------------------------------------
+const server = app.listen(PORT, () => {
+  console.log(`SafeRoute backend listening on 0.0.0.0:${PORT} (all interfaces)`);
+  const lanAddresses = getLanAddresses();
+  if (lanAddresses.length === 0) {
+    console.log(
+      "  WARNING: no non-internal IPv4 interface detected — if a physical " +
+      "phone can't reach this backend, confirm this machine actually has " +
+      "an active Wi-Fi/LAN connection (not just loopback)."
+    );
+  } else {
+    console.log("  Reachable from other devices on the same network at:");
+    lanAddresses.forEach(({ name, address }) => {
+      console.log(`    http://${address}:${PORT}  (interface: ${name})`);
+    });
+    console.log(
+      "  On your phone's browser, open the /health URL above FIRST, before " +
+      "testing the app — if that doesn't load, the problem is network/" +
+      "firewall, not this backend's code (see checklist below)."
+    );
+  }
+  console.log(`  GET /health`);
+  console.log(`  GET /api/route?startLat=..&startLon=..&endLat=..&endLon=..`);
+});
+
+const SHUTDOWN_TIMEOUT_MS = Number(process.env.SHUTDOWN_TIMEOUT_MS || 10000);
+let shuttingDown = false;
+
+function gracefulShutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`[shutdown] received ${signal} — closing server, finishing in-flight requests...`);
+
+  const forceExitTimer = setTimeout(() => {
+    console.error(
+      `[shutdown] still not closed after ${SHUTDOWN_TIMEOUT_MS}ms — forcing exit ` +
+      "(some in-flight requests may not have completed)"
+    );
+    process.exit(1);
+  }, SHUTDOWN_TIMEOUT_MS);
+  forceExitTimer.unref();
+
+  // server.close() stops accepting NEW connections immediately but lets
+  // already-open ones finish naturally — this is what "finish in-flight
+  // work" means for a plain HTTP server with no other special draining.
+  server.close(() => {
+    console.log("[shutdown] HTTP server closed — no more in-flight requests");
+    clearTimeout(forceExitTimer);
+    process.exit(0);
+  });
+}
+
+process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+process.on("SIGINT", () => gracefulShutdown("SIGINT")); 
+================================================== 
+=== routes\route.js === 
+================================================== 
+const express = require("express");
+const { validateRouteQuery } = require("../middleware/requestValidation");
+const { requireClientKey } = require("../middleware/clientAuth");
+const { rateLimit } = require("../middleware/rateLimit");
+const graphhopper = require("../services/graphhopper");
+const metrics = require("../services/metrics");
+
+const router = express.Router();
+
+// GET /api/route?startLat=..&startLon=..&endLat=..&endLon=..
+router.get(
+  "/route",
+  requireClientKey,
+  rateLimit,
+  validateRouteQuery,
+  async (req, res) => {
+    const { startLat, startLon, endLat, endLon } = req.routeParams;
+
+    metrics.incr("route_requests_total");
+
+    try {
+      const { data, cacheHit, deduped } = await graphhopper.getRoute(
+        startLat,
+        startLon,
+        endLat,
+        endLon
+      );
+
+      if (cacheHit) {
+        metrics.incr("route_cache_hits_total");
+      } else {
+        metrics.incr("route_cache_misses_total");
+      }
+
+      if (deduped) {
+        metrics.incr("route_dedup_hits_total");
+      }
+
+      res.set("X-SafeRoute-Cache", cacheHit ? "HIT" : "MISS");
+
+      if (deduped) {
+        res.set("X-SafeRoute-Deduped", "true");
+      }
+
+      if (
+        !data ||
+        !Array.isArray(data.paths) ||
+        data.paths.length === 0
+      ) {
+        return res.status(200).json(
+          data || {
+            paths: [],
+            message: "No route could be found.",
+          }
+        );
+      }
+
+      return res.status(200).json(data);
+    } catch (err) {
+      metrics.incr("route_errors_total");
+
+      console.error("[/api/route] error:", err.message);
+
+      if (err.circuitOpen || err.capacityExhausted) {
+        // Phase 1 addition: these are OUR OWN protective conditions
+        // (circuit breaker open, or bounded queue full), not an actual
+        // error response from GraphHopper — 503 (Service Unavailable,
+        // temporary/retry-able) is the honest signal here, distinct
+        // from the 502 used below for genuine upstream failures.
+        return res.status(503).json({
+          error: err.circuitOpen ? "circuit_open" : "capacity_exhausted",
+          message: "The routing service is temporarily at capacity. Please try again shortly.",
+        });
+      }
+
+      if (err.upstreamStatus) {
+        return res.status(502).json({
+          error: "upstream_routing_error",
+          message: "The routing service could not process this request.",
+        });
+      }
+
+      return res.status(500).json({
+        error: "internal_error",
+        message: "Could not calculate a route. Please try again.",
+      });
+    }
+  }
+);
+
+module.exports = router; 
+================================================== 
+=== services\metrics.js === 
+================================================== 
+// Minimal in-process metrics counters, exposed in Prometheus text
+// exposition format on GET /metrics — no external client library
+// dependency, just plain counters and manual formatting.
+//
+// SCALE NOTE: like the in-memory rate limiter, these counters are
+// per-process. Behind multiple instances, scrape each instance
+// individually (standard Prometheus multi-target scraping) rather than
+// expecting one instance's /metrics to reflect the whole fleet.
+
+const counters = {
+  http_requests_total: 0,
+  route_requests_total: 0,
+  route_cache_hits_total: 0,
+  route_cache_misses_total: 0,
+  route_dedup_hits_total: 0,
+  route_errors_total: 0,
+  rate_limited_total: 0,
+  // Phase 1 additions — upstream resilience layer (services/upstreamQueue.js)
+  upstream_retries_total: 0,
+  upstream_rejected_capacity_total: 0,
+};
+
+const statusCounts = new Map(); // "200" -> count
+
+// Phase 1 addition: gauges (current value, not cumulative) for the
+// upstream queue's live state — queue depth, in-flight count, and
+// circuit breaker state (0=CLOSED, 1=HALF_OPEN, 2=OPEN).
+const gauges = {
+  upstream_queue_depth: 0,
+  upstream_in_flight: 0,
+  upstream_circuit_state: 0,
+};
+
+function setGauge(name, value) {
+  if (!(name in gauges)) return;
+  gauges[name] = value;
+}
+
+function incr(name, by = 1) {
+  if (!(name in counters)) return;
+  counters[name] += by;
+}
+
+function incrStatus(statusCode) {
+  const key = String(statusCode);
+  statusCounts.set(key, (statusCounts.get(key) || 0) + 1);
+}
+
+function renderPrometheus() {
+  const lines = [];
+
+  lines.push("# HELP saferoute_uptime_seconds Process uptime in seconds");
+  lines.push("# TYPE saferoute_uptime_seconds gauge");
+  lines.push(`saferoute_uptime_seconds ${Math.round(process.uptime())}`);
+
+  lines.push("# HELP saferoute_http_requests_total Total HTTP requests handled by this process");
+  lines.push("# TYPE saferoute_http_requests_total counter");
+  lines.push(`saferoute_http_requests_total ${counters.http_requests_total}`);
+
+  lines.push("# HELP saferoute_http_requests_by_status_total HTTP requests by status code");
+  lines.push("# TYPE saferoute_http_requests_by_status_total counter");
+  for (const [status, count] of statusCounts) {
+    lines.push(`saferoute_http_requests_by_status_total{status="${status}"} ${count}`);
+  }
+
+  const routeCounters = [
+    ["route_requests_total", "Total /api/route requests"],
+    ["route_cache_hits_total", "Route responses served from cache"],
+    ["route_cache_misses_total", "Route responses that required an upstream call"],
+    ["route_dedup_hits_total", "Route requests served by joining an in-flight identical request"],
+    ["route_errors_total", "Route requests that errored (upstream or internal)"],
+    ["rate_limited_total", "Requests rejected by the rate limiter"],
+  ];
+  for (const [name, help] of routeCounters) {
+    lines.push(`# HELP saferoute_${name} ${help}`);
+    lines.push(`# TYPE saferoute_${name} counter`);
+    lines.push(`saferoute_${name} ${counters[name]}`);
+  }
+
+  const upstreamCounters = [
+    ["upstream_retries_total", "Total upstream retry attempts (429/502/503/504 only)"],
+    ["upstream_rejected_capacity_total", "Requests rejected because the upstream queue was full"],
+  ];
+  for (const [name, help] of upstreamCounters) {
+    lines.push(`# HELP saferoute_${name} ${help}`);
+    lines.push(`# TYPE saferoute_${name} counter`);
+    lines.push(`saferoute_${name} ${counters[name]}`);
+  }
+
+  const gaugeDefs = [
+    ["upstream_queue_depth", "Requests currently waiting in the bounded upstream queue"],
+    ["upstream_in_flight", "Requests currently executing against the upstream (within concurrency limit)"],
+    ["upstream_circuit_state", "Circuit breaker state: 0=CLOSED, 1=HALF_OPEN, 2=OPEN"],
+  ];
+  for (const [name, help] of gaugeDefs) {
+    lines.push(`# HELP saferoute_${name} ${help}`);
+    lines.push(`# TYPE saferoute_${name} gauge`);
+    lines.push(`saferoute_${name} ${gauges[name]}`);
+  }
+
+  return lines.join("\n") + "\n";
+}
+
+module.exports = { incr, incrStatus, setGauge, renderPrometheus };

@@ -1,0 +1,1 @@
+$ErrorActionPreference = 'Stop'\n$Root = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path\n$EnvFile = Join-Path $Root '.env'\n$content = Get-Content $EnvFile -Raw\n$content = [regex]::Replace($content,'(?m)^ROUTING_MODE=.*$','ROUTING_MODE=cloud')\nSet-Content -Path $EnvFile -Value $content -NoNewline\nWrite-Host 'ROUTING_MODE restored to cloud.'\n
