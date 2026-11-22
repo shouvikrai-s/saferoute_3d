@@ -4,7 +4,7 @@ description: SafeRoute 3D
 
 publish_to: "none"
 
-version: 1.0.0+1
+version: 1.0.2+2004
 
 environment:
   sdk: ">=3.3.0 <4.0.0"
@@ -36,6 +36,7 @@ flutter:
 
   assets:
     - assets/cesium/
+    - assets/cesium/traffic/
     - assets/cesium/Apps/
     - assets/cesium/Assets/
     - assets/cesium/Assets/IAU2006_XYS/
