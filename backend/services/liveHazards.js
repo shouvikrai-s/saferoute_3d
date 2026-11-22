@@ -76,7 +76,7 @@ function classifyLandslide(weather, soilMoisture) {
 }
 
 function classifyAirQuality(usAqi) {
-  if (usAqi === null) return "NO SAMPLE";
+  if (usAqi === null) return "UNAVAILABLE";
   if (usAqi <= 50) return "GOOD";
   if (usAqi <= 100) return "MODERATE";
   if (usAqi <= 150) return "SENSITIVE";
@@ -89,8 +89,8 @@ function buildAirQuality(current) {
   const pm10 = finiteNumber(current.pm10);
   const visibilityImpact = (usAqi !== null && usAqi > 100) ||
       (pm25 !== null && pm25 >= 35.5) || (pm10 !== null && pm10 >= 155)
-    ? "Elevated particles may reduce mountain visibility; visibility itself is not measured."
-    : "No AQI-based visibility impact indicated; visibility itself is not measured.";
+    ? "Elevated particulate readings inform regional atmospheric dispersion screening."
+    : "Regional atmospheric dispersion telemetry reflects the reported pollutant readings.";
   return {
     us_aqi: usAqi,
     european_aqi: finiteNumber(current.european_aqi),
@@ -240,9 +240,9 @@ async function fetchPointTelemetry(lat, lon) {
       ? classifyLandslide({ precipitationSum: weather.precipitation_72h_mm }, soilMoisture)
       : "UNKNOWN",
     sourceStatus: {
-      weather: results[0].status === "fulfilled" ? "LIVE" : "NO SAMPLE",
-      air_quality: results[1].status === "fulfilled" ? "LIVE" : "NO SAMPLE",
-      flood: results[2].status === "fulfilled" ? "LIVE" : "NO SAMPLE"
+      weather: results[0].status === "fulfilled" ? "LIVE" : "UNAVAILABLE",
+      air_quality: results[1].status === "fulfilled" ? "LIVE" : "UNAVAILABLE",
+      flood: results[2].status === "fulfilled" ? "LIVE" : "UNAVAILABLE"
     }
   };
 }

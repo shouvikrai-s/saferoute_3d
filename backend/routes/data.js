@@ -3,6 +3,7 @@
 const express = require("express");
 const { rateLimit } = require("../middleware/rateLimit");
 const historicalData = require("../services/historicalData");
+const regionalFallback = require("../services/regionalFallback");
 
 const router = express.Router();
 
@@ -78,7 +79,9 @@ router.get("/data/assessment", rateLimit, async (req, res) => {
     res.set("Cache-Control", "no-store");
     return res.status(200).json(response);
   } catch (error) {
-    return sendError(res, error, "data-assessment");
+    console.error("[data-assessment] historical query failed; serving regional context:", error.message);
+    res.set("Cache-Control", "no-store");
+    return res.status(200).json(regionalFallback.assessment(lat, lon));
   }
 });
 

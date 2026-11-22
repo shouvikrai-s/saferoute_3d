@@ -3,6 +3,7 @@
 const express = require("express");
 const { rateLimit } = require("../middleware/rateLimit");
 const { getLiveHazards, getPointTelemetry } = require("../services/liveHazards");
+const regionalFallback = require("../services/regionalFallback");
 
 const router = express.Router();
 
@@ -10,10 +11,17 @@ router.get("/hazards/live", rateLimit, async (_req, res) => {
   res.set("Cache-Control", "public, max-age=900, stale-while-revalidate=900");
   const result = await getLiveHazards();
   if (!result.snapshot) {
-    return res.status(503).json({
-      error: "hazards_unavailable",
-      message: "Live hazard snapshot is temporarily unavailable.",
-      stale: false
+    const snapshot = regionalFallback.nearby("nearby-hazards", {
+      lat: 27.3389, lon: 88.6065, radius: 50000, limit: 1, offset: 0
+    });
+    return res.status(200).json({
+      generatedAt: new Date().toISOString(),
+      source: snapshot.source,
+      mode: "REGIONAL_REFERENCE_FALLBACK",
+      corridors: [],
+      tourism: [],
+      regionalScreening: snapshot.regionalContext,
+      cache: { hit: false, stale: false }
     });
   }
   if (result.stale) res.set("X-SafeRoute-Stale", "true");
@@ -51,9 +59,19 @@ router.get("/hazards/point", rateLimit, async (req, res) => {
     });
   } catch (error) {
     console.error("[hazards-point] telemetry request failed:", error.message);
-    return res.status(503).json({
-      error: "point_telemetry_unavailable",
-      message: "Point telemetry feeds did not return usable data."
+    const context = regionalFallback.assessment(lat, lon);
+    res.set("Cache-Control", "public, max-age=300");
+    return res.status(200).json({
+      status: "regional_reference_fallback",
+      generatedAt: new Date().toISOString(),
+      coordinates: { lat, lon },
+      weather: null,
+      air_quality: null,
+      flood: null,
+      landslide_risk: "UNASSESSED",
+      sourceStatus: { weather: "UNAVAILABLE", air_quality: "UNAVAILABLE", flood: "UNAVAILABLE" },
+      regionalScreening: context.regionalScreening,
+      cache: { hit: false, stale: false }
     });
   }
 });

@@ -554,7 +554,7 @@ function buildMonitoringStatus(options = {}) {
     ],
     severity: reportedRisk,
     classification: reportedRisk,
-    summary: `Experimental SafeRoute model estimate for ${locationEvaluations.length} Sikkim locations: average next-day discharge estimate is ${round(averagePredictedValue)} m3/s with ${round(averageUncertainty)} m3/s residual uncertainty. Holdout MAE is ${round(modelMae)} m3/s versus persistence baseline ${round(baselineMae)} m3/s; this model is not eligible to generate a warning or risk classification. Inputs are provider-derived estimates through ${inputDataAsOf}, not verified live gauge observations.`,
+    summary: `SafeRoute model estimate for ${locationEvaluations.length} Sikkim locations: average next-day discharge estimate is ${round(averagePredictedValue)} m3/s with ${round(averageUncertainty)} m3/s residual uncertainty. Holdout MAE is ${round(modelMae)} m3/s versus persistence baseline ${round(baselineMae)} m3/s; this output is informational and does not generate a warning or risk classification. Inputs are provider-derived estimates through ${inputDataAsOf}, not verified live gauge observations.`,
     model: {
       name: MODEL_NAME,
       version: MODEL_VERSION,

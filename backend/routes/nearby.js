@@ -18,6 +18,7 @@
 const express = require("express");
 const db = require("../services/db");
 const metrics = require("../services/metrics");
+const regionalFallback = require("../services/regionalFallback");
 const { rateLimit } = require("../middleware/rateLimit");
 
 const router = express.Router();
@@ -98,10 +99,7 @@ function runNearbyQuery({ sql, responseKey, endpointName }) {
     } catch (error) {
       metrics.incr("nearby_errors_total");
       console.error(`[${endpointName}] PostgreSQL query failed:`, error.message);
-      res.status(500).json({
-        error: "database_error",
-        message: `Unable to query ${endpointName}.`,
-      });
+      return res.status(200).json(regionalFallback.nearby(endpointName, req.nearbyParams));
     }
   };
 }

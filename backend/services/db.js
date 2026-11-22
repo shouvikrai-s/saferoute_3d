@@ -8,7 +8,9 @@ const pool = new Pool({
   password: process.env.POSTGRES_PASSWORD,
   max: 20,
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 5000
+  connectionTimeoutMillis: 5000,
+  query_timeout: 8000,
+  statement_timeout: 8000
 });
 
 pool.on("error", (err) => {

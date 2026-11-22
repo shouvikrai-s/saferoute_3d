@@ -10,20 +10,20 @@ const {
   sumRecentPrecipitation
 } = require("../services/liveHazards");
 
-test("air quality tiers use US AQI thresholds and preserve missing samples", () => {
+test("air quality tiers use US AQI thresholds and preserve unavailable measurements", () => {
   assert.equal(classifyAirQuality(50), "GOOD");
   assert.equal(classifyAirQuality(51), "MODERATE");
   assert.equal(classifyAirQuality(101), "SENSITIVE");
   assert.equal(classifyAirQuality(151), "UNHEALTHY");
-  assert.equal(classifyAirQuality(null), "NO SAMPLE");
+  assert.equal(classifyAirQuality(null), "UNAVAILABLE");
 
   const quality = buildAirQuality({ us_aqi: null, pm2_5: null, pm10: 12, ozone: 24 });
   assert.equal(quality.us_aqi, null);
   assert.equal(quality.pm2_5, null);
   assert.equal(quality.pm10, 12);
   assert.equal(quality.ozone, 24);
-  assert.equal(quality.advisory_tier, "NO SAMPLE");
-  assert.match(quality.visibility_impact, /visibility itself is not measured/);
+  assert.equal(quality.advisory_tier, "UNAVAILABLE");
+  assert.match(quality.visibility_impact, /atmospheric dispersion/);
 });
 
 test("recent precipitation sums only valid measurements inside the requested window", () => {

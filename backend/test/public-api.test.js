@@ -6,6 +6,7 @@ const test = require("node:test");
 const fs = require("node:fs");
 const path = require("node:path");
 const express = require("express");
+const db = require("../services/db");
 
 function request(server, requestPath, method = "GET", body) {
   const { port } = server.address();
@@ -81,4 +82,45 @@ test("shipping SafeRoute HTML contains no client credential or client-key header
   assert.doesNotMatch(html, /new Cesium\.OpenStreetMapImageryProvider/);
   assert.doesNotMatch(html, /globe\.tileLoadProgressEvent\.addEventListener/);
   assert.doesNotMatch(html, /Cesium\.Ion\.defaultAccessToken\s*=\s*["'][^"']/);
+});
+
+test("assessment and nearby routes return regional reference context when PostgreSQL is unavailable", async () => {
+  const originalQuery = db.query;
+  db.query = async () => { throw new Error("database unavailable"); };
+  const app = express();
+  app.use("/api", require("../routes/nearby"));
+  app.use("/api", require("../routes/data"));
+  const server = app.listen(0, "127.0.0.1");
+  await new Promise((resolve, reject) => {
+    server.once("listening", resolve);
+    server.once("error", reject);
+  });
+
+  try {
+    const assessmentResponse = await request(server, "/api/data/assessment?lat=27.3389&lon=88.6065");
+    assert.equal(assessmentResponse.statusCode, 200);
+    const assessment = JSON.parse(assessmentResponse.body);
+    assert.equal(assessment.status, "regional_reference_fallback");
+    assert.equal(assessment.assessment.status, "ACTIVE_SCREENING");
+    assert.equal(assessment.assessment.risk, "UNASSESSED");
+    assert.equal(assessment.assessment.nearestCorridor.name, "Gangtok");
+
+    const hazardsResponse = await request(server, "/api/nearby/hazards?lat=27.3389&lon=88.6065&radius=25000");
+    assert.equal(hazardsResponse.statusCode, 200);
+    const hazards = JSON.parse(hazardsResponse.body);
+    assert.equal(hazards.status, "regional_reference_fallback");
+    assert.deepEqual(hazards.hazards, []);
+    assert.equal(hazards.regionalContext.status, "ACTIVE_SCREENING");
+
+    const tourismResponse = await request(server, "/api/nearby/tourism?lat=27.3389&lon=88.6065&radius=50000");
+    assert.equal(tourismResponse.statusCode, 200);
+    assert.ok(JSON.parse(tourismResponse.body).tourism.length > 0);
+
+    const emergencyResponse = await request(server, "/api/nearby/emergency?lat=27.3389&lon=88.6065&radius=50000");
+    assert.equal(emergencyResponse.statusCode, 200);
+    assert.ok(JSON.parse(emergencyResponse.body).emergencyFacilities.length > 0);
+  } finally {
+    db.query = originalQuery;
+    await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+  }
 });
